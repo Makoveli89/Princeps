@@ -1,0 +1,13 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c:*)",
+      "Bash(pip show:*)",
+      "Bash(pip install:*)",
+      "Bash(dir F:Princepsbrain_layer /B)",
+      "Bash(ruff check:*)",
+      "Bash(mypy:*)",
+      "Bash(python -m mypy:*)"
+    ]
+  }
+}

@@ -1,0 +1,28 @@
+# Princeps Brain Layer Dependencies
+# ==================================
+
+# Core
+sqlalchemy>=2.0
+psycopg2-binary
+pgvector
+
+# Embeddings & ML
+sentence-transformers
+chromadb
+transformers
+spacy
+keybert
+bertopic
+
+# Graph & Analysis
+networkx
+
+# Tokenization
+tiktoken
+
+# Document Processing
+pypdf
+
+# Database
+supabase
+alembic
