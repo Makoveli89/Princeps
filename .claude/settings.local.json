@@ -7,7 +7,22 @@
       "Bash(dir F:Princepsbrain_layer /B)",
       "Bash(ruff check:*)",
       "Bash(mypy:*)",
-      "Bash(python -m mypy:*)"
+      "Bash(python -m mypy:*)",
+      "Bash(dir /s \"F:\\Princeps\")",
+      "Bash(tree:*)",
+      "Bash(Get-ChildItem -Path \"F:\\Princeps\" -Recurse -Directory)",
+      "Bash(Select-Object FullName)",
+      "Bash(dir F:Princepsbrain /B)",
+      "Bash(python -m pytest:*)",
+      "Bash(tasklist:*)",
+      "Bash(dir /s /b F:*agent*.py)",
+      "Bash(dir /s /b \"F:\\*llm*.py\")",
+      "Bash(cat:*)",
+      "Bash(python:*)",
+      "Bash(dir /s F:Princepsagents)",
+      "Bash(dir /s F:Princepsbrain)",
+      "Bash(dir /s F:Princepsllms)",
+      "Bash(pytest:*)"
     ]
   }
 }

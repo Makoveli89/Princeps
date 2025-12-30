@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools>=61.0", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "princeps-brain"
+version = "0.1.0"
+description = "Princeps Brain Layer - Knowledge management system for AI agents"
+readme = "README.md"
+license = {text = "MIT"}
+requires-python = ">=3.10"
+authors = [
+    {name = "Princeps Team"}
+]
+keywords = ["ai", "knowledge-management", "rag", "embeddings", "agents"]
+classifiers = [
+    "Development Status :: 3 - Alpha",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+]
+
+dependencies = [
+    "sqlalchemy>=2.0",
+    "psycopg2-binary>=2.9",
+    "pydantic>=2.0",
+    "python-dotenv>=1.0",
+    "tiktoken>=0.5",
+]
+
+[project.optional-dependencies]
+ml = [
+    "sentence-transformers>=2.2",
+    "transformers>=4.30",
+    "torch>=2.0",
+    "spacy>=3.5",
+    "keybert>=0.7",
+]
+dev = [
+    "pytest>=7.0",
+    "pytest-asyncio>=0.21",
+    "pytest-cov>=4.0",
+    "black>=23.0",
+    "ruff>=0.1",
+    "mypy>=1.0",
+]
+api = [
+    "fastapi>=0.100",
+    "uvicorn>=0.22",
+]
+all = [
+    "princeps-brain[ml,dev,api]",
+]
+
+[project.scripts]
+princeps-brain = "brain.interface.brain_cli:cli_main"
+
+[project.urls]
+Homepage = "https://github.com/princeps/brain"
+Documentation = "https://github.com/princeps/brain#readme"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["brain*"]
+
+[tool.black]
+line-length = 100
+target-version = ["py310", "py311", "py312"]
+
+[tool.ruff]
+line-length = 100
+
+[tool.ruff.lint]
+select = ["E", "F", "W", "I", "UP"]
+ignore = ["E501", "W293"]
+
+[tool.mypy]
+python_version = "3.10"
+warn_return_any = true
+warn_unused_configs = true
+ignore_missing_imports = true
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+python_files = ["test_*.py"]
+addopts = "-v --tb=short"
