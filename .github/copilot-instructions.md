@@ -77,8 +77,8 @@ Orchestration system for specialized AI agents:
 - Example (module-level):
   ```python
   """
-  Module/Class Name - Brief Description
-  =====================================
+  Module Name - Brief Description
+  =================================
   
   Detailed description of functionality.
   
@@ -293,6 +293,7 @@ class MyModel(Base):
 ### Writing a Test
 ```python
 import pytest
+
 from brain.ingestion import IngestService
 
 class TestIngestService:
