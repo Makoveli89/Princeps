@@ -50,6 +50,21 @@ cp .env.example .env
 # Edit .env with your database credentials and API keys
 ```
 
+### Launch the Platform
+
+To start the full platform (Backend API + Console UI), simply run:
+
+```bash
+./start.sh
+```
+
+This will:
+1. Install necessary Python and Node.js dependencies.
+2. Start the FastAPI backend server on port 8000.
+3. Start the Princeps Console (React UI) on port 5173.
+
+Access the console at: **http://localhost:5173**
+
 ### Brain Layer Usage
 
 ```python
