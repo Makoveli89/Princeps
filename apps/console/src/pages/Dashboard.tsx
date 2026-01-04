@@ -2,25 +2,21 @@ import React, { useEffect, useState } from 'react';
 import { Card } from '../components/Card';
 import { Button } from '../components/Button';
 import { BarChart3, Cpu, Zap, ScrollText } from 'lucide-react';
+import { Stats } from '../types';
 
 export const Dashboard: React.FC = () => {
-  const [stats, setStats] = useState({
+  const [stats, setStats] = useState<Stats>({
     activeAgents: 0,
     tasksCompleted: 0,
-    uptime: '0h',
+    uptime: '-',
     knowledgeNodes: 0
   });
 
   useEffect(() => {
-    // Simulate loading data
-    setTimeout(() => {
-      setStats({
-        activeAgents: 8,
-        tasksCompleted: 142,
-        uptime: '42h',
-        knowledgeNodes: 8391
-      });
-    }, 500);
+    fetch('/api/stats')
+      .then(res => res.json())
+      .then(data => setStats(data))
+      .catch(err => console.error("Failed to load stats", err));
   }, []);
 
   return (
@@ -60,15 +56,10 @@ export const Dashboard: React.FC = () => {
             <Button size="sm" variant="secondary">View Log</Button>
           </div>
           <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="flex items-center justify-between p-3 bg-gothic-900/50 rounded border border-gothic-700/50">
-                <div className="flex items-center gap-3">
-                  <div className="w-2 h-2 rounded-full bg-gothic-gold animate-pulse" />
-                  <span className="font-mono text-sm text-gothic-text">OP-{1000 + i}: Knowledge distillation in sector 7</span>
-                </div>
-                <span className="text-xs text-gothic-muted font-mono">00:0{i}:23</span>
-              </div>
-            ))}
+             {/* We could fetch real recent runs here later */}
+             <div className="text-center py-8 text-gothic-muted text-sm italic">
+               Awaiting system activity...
+             </div>
           </div>
         </Card>
 
@@ -76,9 +67,9 @@ export const Dashboard: React.FC = () => {
           <h3 className="text-lg font-serif font-semibold mb-4">System Health</h3>
           <div className="space-y-6">
             <HealthBar label="Memory Usage" percent={45} color="bg-gothic-purple" />
-            <HealthBar label="CPU Load" percent={72} color="bg-gothic-gold" />
+            <HealthBar label="CPU Load" percent={12} color="bg-gothic-gold" />
             <HealthBar label="Network IO" percent={28} color="bg-blue-500" />
-            <HealthBar label="Database" percent={12} color="bg-green-500" />
+            <HealthBar label="Database" percent={100} color="bg-green-500" />
           </div>
         </Card>
       </div>

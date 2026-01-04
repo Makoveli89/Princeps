@@ -1,4 +1,4 @@
-import { Workspace, Agent, Run } from './types';
+import { Workspace, Agent } from './types';
 
 export const MOCK_WORKSPACES: Workspace[] = [
   {

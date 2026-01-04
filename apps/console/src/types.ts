@@ -15,13 +15,22 @@ export interface Agent {
   capabilities: string[];
 }
 
-export interface Run {
-  id: string;
+export interface RunRequest {
   agentId: string;
-  taskId: string;
-  status: 'pending' | 'running' | 'success' | 'failed';
-  startedAt: string;
-  completedAt?: string;
   input: string;
-  output?: string;
+  workspaceId: string;
+}
+
+export interface RunResponse {
+  status: string;
+  run_id: string;
+  output: string;
+  full_result: any;
+}
+
+export interface Stats {
+  activeAgents: number;
+  tasksCompleted: number;
+  uptime: string;
+  knowledgeNodes: number;
 }

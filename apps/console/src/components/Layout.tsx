@@ -1,6 +1,6 @@
 import React from 'react';
 import { NavLink, Outlet } from 'react-router-dom';
-import { LayoutDashboard, Database, Activity, Settings, Crown } from 'lucide-react';
+import { LayoutDashboard, Database, Activity, Settings, Crown, Terminal } from 'lucide-react';
 import { clsx } from 'clsx';
 
 export const Layout: React.FC = () => {
@@ -16,6 +16,7 @@ export const Layout: React.FC = () => {
         <nav className="flex-1 px-4 py-6 space-y-2">
           <NavItem to="/" icon={<LayoutDashboard size={20} />} label="Overview" />
           <NavItem to="/workspaces" icon={<Database size={20} />} label="Workspaces" />
+          <NavItem to="/console" icon={<Terminal size={20} />} label="Agent Console" />
           <NavItem to="/activity" icon={<Activity size={20} />} label="Activity" />
         </nav>
 
@@ -29,7 +30,7 @@ export const Layout: React.FC = () => {
 
       {/* Main Content */}
       <main className="flex-1 overflow-auto">
-        <div className="container mx-auto p-8 max-w-7xl">
+        <div className="container mx-auto p-8 max-w-7xl h-full">
           <Outlet />
         </div>
       </main>

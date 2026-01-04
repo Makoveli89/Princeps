@@ -97,3 +97,7 @@ nul
 # Local config (keep .env.example)
 .env.local
 .env.*.local
+apps/console/node_modules/
+apps/console/dist/
+apps/console/node_modules
+apps/console/node_modules

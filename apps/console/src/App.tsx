@@ -3,6 +3,7 @@ import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
 import { Workspaces } from './pages/Workspaces';
+import { AgentConsole } from './pages/AgentConsole';
 
 const App: React.FC = () => {
   return (
@@ -11,6 +12,7 @@ const App: React.FC = () => {
         <Route path="/" element={<Layout />}>
           <Route index element={<Dashboard />} />
           <Route path="workspaces" element={<Workspaces />} />
+          <Route path="console" element={<AgentConsole />} />
           <Route path="activity" element={<div className="text-gothic-muted">Activity Log (Coming Soon)</div>} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Route>

@@ -15,7 +15,18 @@ if ! command -v npm &> /dev/null; then
     exit 1
 fi
 
+# Check for Docker (Optional but recommended for DB)
+if ! command -v docker &> /dev/null; then
+    echo "⚠️  Warning: Docker is not installed. You will need a running Postgres instance."
+else
+    # Check if a postgres container is running?
+    # For now, just warn if DB is not accessible.
+    pass=true
+fi
+
 echo "📦 Installing Backend Dependencies..."
+# We install the package in editable mode to ensure all deps (brain, framework) are available
+pip install -e ".[all]"
 pip install fastapi uvicorn
 
 echo "📦 Installing Frontend Dependencies..."
@@ -29,6 +40,14 @@ echo "🚀 Launching Services..."
 echo "   - Starting Backend Server (Port 8000)..."
 python3 server.py > backend.log 2>&1 &
 BACKEND_PID=$!
+
+# Wait a moment for backend to maybe print DB error
+sleep 2
+if grep -q "Database initialization failed" backend.log; then
+    echo "⚠️  Backend reported database issues. Check backend.log."
+    echo "   Ensure you have a PostgreSQL database running and DATABASE_URL set."
+    echo "   Example: export DATABASE_URL=postgresql://user:pass@localhost:5432/princeps"
+fi
 
 # Start Frontend
 echo "   - Starting Frontend Console (Port 5173)..."
