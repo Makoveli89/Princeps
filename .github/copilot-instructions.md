@@ -72,7 +72,9 @@ Orchestration system for specialized AI agents:
 - Include docstrings for all modules, classes, and public functions
 - Use triple-quoted strings with description and usage examples
 - Format: Start with one-line summary, followed by detailed description
-- Example:
+- For module-level docstrings, use underline formatting (see example below)
+- For class and function docstrings, use standard format without underlines
+- Example (module-level):
   ```python
   """
   Module/Class Name - Brief Description
@@ -276,7 +278,7 @@ uvicorn brain.interface.brain_api:create_app --factory --reload
 
 ### Creating a Database Model
 ```python
-from sqlalchemy import Column, String, ForeignKey
+from sqlalchemy import Column, String, ForeignKey, text
 from sqlalchemy.dialects.postgresql import UUID
 from brain.core.models import Base
 
