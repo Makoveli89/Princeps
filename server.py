@@ -155,7 +155,7 @@ def get_stats(db=Depends(get_db)):
 
 @app.get("/api/workspaces", response_model=List[WorkspaceDTO])
 def get_workspaces(db=Depends(get_db)):
-    tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
+    tenants = db.query(Tenant).filter(Tenant.is_active).all()
 
     result = []
     for t in tenants:
