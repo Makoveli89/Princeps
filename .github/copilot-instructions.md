@@ -79,9 +79,9 @@ Orchestration system for specialized AI agents:
   """
   Module Name - Brief Description
   =================================
-
+  
   Detailed description of functionality.
-
+  
   Usage:
       from module import Class
       obj = Class()
@@ -284,7 +284,7 @@ from brain.core.models import Base
 
 class MyModel(Base):
     __tablename__ = "my_model"
-
+    
     id = Column(UUID, primary_key=True, server_default=text("gen_random_uuid()"))
     tenant_id = Column(UUID, ForeignKey("tenant.id"), nullable=False, index=True)
     name = Column(String, nullable=False)
@@ -298,17 +298,17 @@ from brain.ingestion import IngestService
 
 class TestIngestService:
     """Tests for IngestService class."""
-
+    
     def test_ingest_document_success(self, tmp_path):
         """Should successfully ingest a valid document."""
         # Create test file
         test_file = tmp_path / "test.txt"
         test_file.write_text("Test content")
-
+        
         # Test ingestion
         service = IngestService()
         result = service.ingest_document(str(test_file))
-
+        
         assert result.success is True
         assert result.document_id is not None
 ```
