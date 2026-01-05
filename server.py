@@ -2,7 +2,7 @@ import os
 import uuid
 import datetime
 import asyncio
-from typing import List, Optional, Dict, Any
+from typing import List, Dict, Any
 from contextlib import asynccontextmanager
 
 import uvicorn
