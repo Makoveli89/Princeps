@@ -99,6 +99,8 @@ def get_engine(
             max_overflow=max_overflow,
             pool_pre_ping=True,  # Verify connections before use
             echo=echo,
+            # Disable prepared statements for Supabase Transaction Pooler compatibility
+            connect_args={"prepare_threshold": None},
         )
 
     return _engine
