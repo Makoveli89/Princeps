@@ -182,6 +182,10 @@ def compute_input_hash(op_type: str, inputs: dict[str, Any]) -> str:
     """
     Compute deterministic hash of operation inputs for idempotency.
     
+    This is a simple implementation for basic use cases. For advanced
+    features like path normalization and field exclusion, use
+    brain.resilience.idempotency_service.compute_input_hash instead.
+    
     Args:
         op_type: The operation type string
         inputs: Dictionary of input parameters

@@ -3,6 +3,7 @@ import os
 import sys
 import json
 import pytest
+import asyncio
 from datetime import datetime
 from uuid import uuid4
 
@@ -13,6 +14,22 @@ from sqlalchemy import create_engine, event, Text, String
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import TypeDecorator
 
+
+# =============================================================================
+# ASYNC TEST SUPPORT
+# =============================================================================
+
+@pytest.fixture(scope="session")
+def event_loop():
+    """Create an instance of the default event loop for the test session."""
+    loop = asyncio.get_event_loop_policy().new_event_loop()
+    yield loop
+    loop.close()
+
+
+# =============================================================================
+# SQLITE TYPE ADAPTERS
+# =============================================================================
 # Define SQLite-compatible type adapters BEFORE importing models
 # These will be used to create a separate Base for testing
 
@@ -46,7 +63,6 @@ class SQLiteArray(TypeDecorator):
         if value is not None:
             return json.loads(value)
         return None
-
 
 class SQLiteUUID(TypeDecorator):
     """SQLite-compatible UUID (stores as string)."""

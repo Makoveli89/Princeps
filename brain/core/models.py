@@ -57,7 +57,19 @@ try:
     PGVECTOR_AVAILABLE = True
 except ImportError:
     PGVECTOR_AVAILABLE = False
-    Vector = None  # type: ignore
+    # Create a placeholder that acts like a Column type but stores as Text
+    # This allows code to run without pgvector, just without vector operations
+    from sqlalchemy import Text as _TextFallback
+    
+    class _VectorFallback:
+        """Fallback for Vector type when pgvector is not available."""
+        def __init__(self, dim: int = 384):
+            self.dim = dim
+        
+        def __call__(self, *args, **kwargs):
+            return _TextFallback()
+    
+    Vector = _VectorFallback  # type: ignore
 
 Base = declarative_base()
 
@@ -175,6 +187,9 @@ def generate_uuid() -> str:
 def compute_input_hash(op_type: str, inputs: dict[str, Any]) -> str:
     """
     Compute deterministic hash of operation inputs for idempotency.
+    
+    Note: For advanced idempotency with path normalization and config options,
+    prefer using brain.resilience.idempotency_service.compute_input_hash.
     
     Args:
         op_type: The operation type string

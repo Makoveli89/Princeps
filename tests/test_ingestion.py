@@ -11,7 +11,7 @@ from brain.ingestion.ingest_service import (
     IngestResult,
     TextExtractor,
     TextChunker,
-    SecurityScanner,
+    SecurityScanner,  # Note: This is the ingest_service version with dict return type
 )
 
 
@@ -128,13 +128,19 @@ class TestTextChunker:
 
 
 class TestSecurityScanner:
-    """Tests for SecurityScanner in ingestion."""
+    """Tests for SecurityScanner in ingestion.
+    
+    Note: This tests the SecurityScanner from brain.ingestion.ingest_service
+    which returns dict[str, list[str]] with 'pii' and 'secrets' keys.
+    For the dataclass-based SecurityScanner, see test_security.py.
+    """
 
     def test_detects_email(self):
         """Should detect email addresses."""
         scanner = SecurityScanner()
         content = "Contact us at test@example.com for more info."
         results = scanner.scan(content)
+        assert isinstance(results, dict), "Expected dict return type"
         assert 'email' in results.get('pii', [])
 
     def test_detects_phone(self):
