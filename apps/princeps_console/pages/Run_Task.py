@@ -18,10 +18,25 @@ st.caption(f"Executing in Workspace: **{ws_details.name}** ({ws_id})")
 
 # --- Input Form ---
 with st.form("run_task_form"):
-    task_prompt = st.text_area("Task Prompt", height=150, help="Describe what you want the agent to do.")
+    task_prompt = st.text_area(
+        "Task Prompt",
+        height=150,
+        help="Describe what you want the agent to do.",
+        placeholder="Example: Search for the latest stock price of AAPL and summarize recent news."
+    )
 
     workflow_options = ["default", "plan_and_execute", "create_plan"]
-    workflow_select = st.selectbox("Workflow", options=workflow_options, index=0)
+    workflow_help = (
+        "**default**: Single-step execution\n"
+        "**plan_and_execute**: Break down complex tasks into steps\n"
+        "**create_plan**: Generate a plan without executing it"
+    )
+    workflow_select = st.selectbox(
+        "Workflow",
+        options=workflow_options,
+        index=0,
+        help=workflow_help
+    )
 
     submitted = st.form_submit_button("Run Task", type="primary")
 
