@@ -1,17 +1,19 @@
 import os
 import uuid
 import datetime
-from typing import List, Dict, Any
+import asyncio
+from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 
 # Princeps Imports
 from brain.core.db import get_engine, init_db, get_session
-from brain.core.models import Tenant, AgentRun, KnowledgeNode
+from brain.core.models import Tenant, AgentRun, Document, KnowledgeNode, Resource
+from framework.agents.base_agent import BaseAgent, AgentConfig, AgentTask, LLMProvider
 from framework.agents.example_agent import SummarizationAgent
 from framework.llms.multi_llm_client import MultiLLMClient
 
@@ -28,8 +30,6 @@ async def lifespan(app: FastAPI):
         print("✅ Database initialized.")
     except Exception as e:
         print(f"❌ Database initialization failed. Ensure Postgres is running. Error: {e}")
-        # Re-raise to prevent starting the application in an invalid state
-        raise
 
     yield
     # Cleanup if needed
@@ -157,7 +157,7 @@ def get_stats(db=Depends(get_db)):
 
 @app.get("/api/workspaces", response_model=List[WorkspaceDTO])
 def get_workspaces(db=Depends(get_db)):
-    tenants = db.query(Tenant).filter(Tenant.is_active).all()
+    tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
 
     result = []
     for t in tenants:
