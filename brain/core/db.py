@@ -92,16 +92,23 @@ def get_engine(
     global _engine
 
     if _engine is None:
-        _engine = create_engine(
-            url or get_database_url(),
-            poolclass=QueuePool,
-            pool_size=pool_size,
-            max_overflow=max_overflow,
-            pool_pre_ping=True,  # Verify connections before use
-            echo=echo,
-            # Disable prepared statements for Supabase Transaction Pooler compatibility
-            connect_args={"prepare_threshold": None},
-        )
+        db_url = url or get_database_url()
+        is_sqlite = db_url.startswith("sqlite")
+        
+        engine_kwargs = {"echo": echo}
+        
+        if is_sqlite:
+            # SQLite-specific settings
+            engine_kwargs["connect_args"] = {"check_same_thread": False}
+        else:
+            # PostgreSQL-specific settings
+            engine_kwargs["poolclass"] = QueuePool
+            engine_kwargs["pool_size"] = pool_size
+            engine_kwargs["max_overflow"] = max_overflow
+            engine_kwargs["pool_pre_ping"] = True
+            engine_kwargs["connect_args"] = {"prepare_threshold": None}
+        
+        _engine = create_engine(db_url, **engine_kwargs)
 
     return _engine
 
@@ -153,12 +160,16 @@ def init_db(engine: Engine | None = None) -> None:
     """
     engine = engine or get_engine()
 
-    # Enable extensions
-    with engine.connect() as conn:
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-        conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\""))
-        conn.commit()
+    # Check if using PostgreSQL (extensions only available there)
+    is_postgres = str(engine.url).startswith("postgresql")
+    
+    if is_postgres:
+        # Enable PostgreSQL extensions
+        with engine.connect() as conn:
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
+            conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\""))
+            conn.commit()
 
     # Create all tables
     Base.metadata.create_all(engine)
