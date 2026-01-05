@@ -19,6 +19,13 @@ from framework.agents.base_agent import BaseAgent, AgentConfig, AgentTask, LLMPr
 from framework.agents.example_agent import SummarizationAgent
 from framework.llms.multi_llm_client import MultiLLMClient
 
+# Skills
+from framework.skills.resolver import SkillResolver
+from framework.skills.registry import get_registry
+# Import library to register skills
+import framework.skills.library.code_review
+import framework.skills.library.research
+
 # Initialize Database on Startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -73,6 +80,10 @@ class RunRequest(BaseModel):
     input: str
     workspaceId: str
 
+class SkillRunRequest(BaseModel):
+    query: str
+    workspaceId: str
+
 class StatsDTO(BaseModel):
     activeAgents: int
     tasksCompleted: int
@@ -96,6 +107,7 @@ class AgentManager:
         # And a mock client for now since we don't have keys in env usually
         # But for "Real Data", we should try to use the real client if keys exist.
         self.llm_client = MultiLLMClient()
+        self.skill_resolver = SkillResolver(llm_client=self.llm_client)
 
     def get_agents(self) -> List[AgentDTO]:
         return [
@@ -129,6 +141,46 @@ class AgentManager:
         # We need to run this asynchronously
         response = await agent_def.execute_task(task)
         return response.to_dict()
+
+    async def run_skill(self, query: str, workspace_id: str) -> Dict[str, Any]:
+        """
+        Resolve and execute a skill based on natural language query.
+        """
+        skill_name, params = await self.skill_resolver.resolve(query)
+
+        if not skill_name:
+            return {
+                "status": "failed",
+                "message": "Could not identify a skill for your request.",
+                "query": query
+            }
+
+        skill_cls = get_registry().get_skill(skill_name)
+        if not skill_cls:
+             return {
+                "status": "failed",
+                "message": f"Skill '{skill_name}' was resolved but not found in registry.",
+                "query": query
+            }
+
+        # Instantiate and execute
+        skill_instance = skill_cls(context={"tenant_id": workspace_id})
+
+        try:
+            result = await skill_instance.execute(**params)
+            return {
+                "status": "success",
+                "skill_name": skill_name,
+                "parameters": params,
+                "result": result
+            }
+        except Exception as e:
+            return {
+                "status": "error",
+                "message": str(e),
+                "skill_name": skill_name
+            }
+
 
 agent_manager = AgentManager()
 
@@ -224,6 +276,18 @@ async def run_agent(request: RunRequest):
         }
     except Exception as e:
         print(f"Agent run failed: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@app.post("/api/skills/execute")
+async def execute_skill(request: SkillRunRequest):
+    """
+    Execute a natural language skill.
+    """
+    try:
+        result = await agent_manager.run_skill(request.query, request.workspaceId)
+        return result
+    except Exception as e:
+        print(f"Skill execution failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
 if __name__ == "__main__":
