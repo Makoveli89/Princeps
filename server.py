@@ -28,6 +28,8 @@ async def lifespan(app: FastAPI):
         print("✅ Database initialized.")
     except Exception as e:
         print(f"❌ Database initialization failed. Ensure Postgres is running. Error: {e}")
+        # Re-raise to prevent starting the application in an invalid state
+        raise
 
     yield
     # Cleanup if needed
