@@ -54,8 +54,15 @@ cp .env.example .env
 
 To start the full platform (Backend API + Console UI), simply run:
 
+**Linux / macOS:**
 ```bash
 ./start.sh
+```
+
+**Windows:**
+Double-click `start.bat` or run in Command Prompt:
+```cmd
+start.bat
 ```
 
 This will:
