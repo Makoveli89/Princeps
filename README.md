@@ -12,7 +12,7 @@ Knowledge management system for AI agents with multi-tenant support, semantic se
 ```
 brain/
 ├── core/           # Database models, schemas, utilities
-├── ingestion/      # Document & repository ingestion  
+├── ingestion/      # Document & repository ingestion
 ├── distillation/   # Knowledge extraction (NER, topics, concepts)
 ├── observability/  # Structured logging, metrics, tracing
 ├── resilience/     # Fault tolerance, retry, idempotency
@@ -49,6 +49,21 @@ pip install -e ".[all]"
 cp .env.example .env
 # Edit .env with your database credentials and API keys
 ```
+
+### Launch the Platform
+
+To start the full platform (Backend API + Console UI), simply run:
+
+```bash
+./start.sh
+```
+
+This will:
+1. Install necessary Python and Node.js dependencies.
+2. Start the FastAPI backend server on port 8000.
+3. Start the Princeps Console (React UI) on port 5173.
+
+Access the console at: **http://localhost:5173**
 
 ### Brain Layer Usage
 
@@ -126,7 +141,7 @@ The Brain Layer uses PostgreSQL with pgvector for semantic search. Key tables:
 
 - **Tenant** - Multi-tenant isolation
 - **Repository** - Git repository tracking
-- **Resource** - File/document resources  
+- **Resource** - File/document resources
 - **Document** - Ingested content with metadata
 - **DocChunk** - Chunked content with embeddings
 - **Operation** - Idempotent operation tracking
