@@ -34,12 +34,17 @@ st.sidebar.title("Princeps Console")
 active_ws_id = get_active_workspace()
 active_ws_details = get_active_workspace_details()
 
-session = get_db_session()
-try:
-    all_workspaces = session.query(Tenant).all()
-    ws_options = {str(ws.id): f"{ws.name} • {str(ws.id)[:8]}" for ws in all_workspaces}
-finally:
-    session.close()
+@st.cache_data(ttl=60)
+def get_cached_workspaces():
+    session = get_db_session()
+    try:
+        # Return simple data structure to avoid pickling issues with SQLAlchemy objects
+        return [{"id": str(ws.id), "name": ws.name} for ws in session.query(Tenant).all()]
+    finally:
+        session.close()
+
+workspaces_data = get_cached_workspaces()
+ws_options = {ws["id"]: f"{ws['name']} • {ws['id'][:8]}" for ws in workspaces_data}
 
 if active_ws_id:
     selected_ws = st.sidebar.selectbox(
