@@ -30,4 +30,4 @@ streamlit
 pypdf
 python-multipart
 python-dotenv
-structlog
+slowapi

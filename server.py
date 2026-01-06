@@ -9,11 +9,16 @@ import logging
 import time
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
+import logging
 
 import structlog
 import uvicorn
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from pydantic import BaseModel
 from sqlalchemy import func, desc, text
 
@@ -68,6 +73,10 @@ from framework.retrieval.vector_search import (
     VectorSearchResult
 )
 
+# Initialize Logger
+logging.basicConfig(level=logging.INFO)
+logger = logging.getLogger(__name__)
+
 # Initialize Database on Startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
@@ -87,36 +96,10 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Princeps Console Backend", version="0.1.0", lifespan=lifespan)
 
-# Logging Middleware
-@app.middleware("http")
-async def logging_middleware(request: Request, call_next):
-    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
-    structlog.contextvars.clear_contextvars()
-    structlog.contextvars.bind_contextvars(
-        request_id=request_id,
-        method=request.method,
-        path=request.url.path,
-    )
-
-    start_time = time.perf_counter()
-    try:
-        response = await call_next(request)
-        process_time = time.perf_counter() - start_time
-
-        logger.info(
-            "request_processed",
-            status_code=response.status_code,
-            process_time=process_time
-        )
-        return response
-    except Exception as e:
-        process_time = time.perf_counter() - start_time
-        logger.error(
-            "request_failed",
-            error=str(e),
-            process_time=process_time
-        )
-        raise
+# Initialize Limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Enable CORS for local development
 app.add_middleware(
@@ -126,6 +109,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(SlowAPIMiddleware)
 
 # --- Types ---
 
@@ -275,20 +260,14 @@ class AgentManager:
         # Instantiate and execute
         skill_instance = skill_cls(context={"tenant_id": workspace_id})
 
-        try:
-            result = await skill_instance.execute(**params)
-            return {
-                "status": "success",
-                "skill_name": skill_name,
-                "parameters": params,
-                "result": result
-            }
-        except Exception as e:
-            return {
-                "status": "error",
-                "message": str(e),
-                "skill_name": skill_name
-            }
+        # Let exceptions bubble up to the global handler
+        result = await skill_instance.execute(**params)
+        return {
+            "status": "success",
+            "skill_name": skill_name,
+            "parameters": params,
+            "result": result
+        }
 
 
 agent_manager = AgentManager()
@@ -307,12 +286,8 @@ def get_stats(db=Depends(get_db)):
         return StatsDTO(activeAgents=1, tasksCompleted=0, uptime="99.9%", knowledgeNodes=0)
 
     # Fetch real counts
-    try:
-        node_count = db.query(KnowledgeNode).count()
-        task_count = db.query(AgentRun).filter(AgentRun.success == True).count()
-    except:
-        node_count = 0
-        task_count = 0
+    node_count = db.query(KnowledgeNode).count()
+    task_count = db.query(AgentRun).filter(AgentRun.success == True).count()
 
     active_agents = len(agent_manager.available_agents)
 
@@ -327,34 +302,31 @@ def get_stats(db=Depends(get_db)):
 def get_workspaces(db=Depends(get_db)):
     if db is None:
         # Return empty list if DB is down, rather than 500
+        # This behavior is debatable but keeps the UI working even if DB is problematic initially
         return []
 
-    try:
-        tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
+    tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
 
-        result = []
-        for t in tenants:
-            # Real counts per tenant
-            doc_count = db.query(Document).filter(Document.tenant_id == t.id).count()
-            chunk_count = db.query(DocChunk).filter(DocChunk.tenant_id == t.id).count()
-            run_count = db.query(AgentRun).filter(AgentRun.tenant_id == t.id).count()
-            agent_count = 0
+    result = []
+    for t in tenants:
+        # Real counts per tenant
+        doc_count = db.query(Document).filter(Document.tenant_id == t.id).count()
+        chunk_count = db.query(DocChunk).filter(DocChunk.tenant_id == t.id).count()
+        run_count = db.query(AgentRun).filter(AgentRun.tenant_id == t.id).count()
+        agent_count = 0
 
-            result.append(WorkspaceDTO(
-                id=str(t.id),
-                name=t.name,
-                description=t.description,
-                status="active" if t.is_active else "archived",
-                agentCount=agent_count,
-                lastActive=t.updated_at.isoformat() if t.updated_at else datetime.datetime.utcnow().isoformat(),
-                docCount=doc_count,
-                chunkCount=chunk_count,
-                runCount=run_count
-            ))
-        return result
-    except Exception as e:
-        logger.error("fetching_workspaces_failed", error=str(e))
-        return []
+        result.append(WorkspaceDTO(
+            id=str(t.id),
+            name=t.name,
+            description=t.description,
+            status="active" if t.is_active else "archived",
+            agentCount=agent_count,
+            lastActive=t.updated_at.isoformat() if t.updated_at else datetime.datetime.utcnow().isoformat(),
+            docCount=doc_count,
+            chunkCount=chunk_count,
+            runCount=run_count
+        ))
+    return result
 
 @app.post("/api/workspaces", response_model=WorkspaceDTO)
 def create_workspace(req: CreateWorkspaceRequest, db=Depends(get_db)):
@@ -392,7 +364,8 @@ def get_agents():
     return agent_manager.get_agents()
 
 @app.post("/api/run")
-async def run_agent(request: RunRequest):
+@limiter.limit("5/minute")
+async def run_agent(request: Request, body: RunRequest):
     # For simplicity in this version, we'll await it (blocking).
     # In production, use background_tasks.add_task or a queue (Celery/Redis).
     # Since BaseAgent calls can be long, we should ideally be async.
@@ -400,7 +373,7 @@ async def run_agent(request: RunRequest):
     try:
         # Note: This will fail if no API keys are present in env, which is expected.
         # The UI should handle the error.
-        result = await agent_manager.run_agent(request.agentId, request.input, request.workspaceId)
+        result = await agent_manager.run_agent(body.agentId, body.input, body.workspaceId)
         return {
             "status": "success",
             "run_id": result.get("task_id"),
@@ -414,12 +387,13 @@ async def run_agent(request: RunRequest):
         raise HTTPException(status_code=500, detail=f"Internal server error. Error ID: {error_id}")
 
 @app.post("/api/skills/execute")
-async def execute_skill(request: SkillRunRequest):
+@limiter.limit("10/minute")
+async def execute_skill(request: Request, body: SkillRunRequest):
     """
     Execute a natural language skill.
     """
     try:
-        result = await agent_manager.run_skill(request.query, request.workspaceId)
+        result = await agent_manager.run_skill(body.query, body.workspaceId)
         return result
     except Exception as e:
         error_id = str(uuid.uuid4())
@@ -430,24 +404,24 @@ async def execute_skill(request: SkillRunRequest):
 # --- New Endpoints ---
 
 @app.post("/api/ingest")
+@limiter.limit("10/minute")
 async def ingest_document(
+    request: Request,
     file: UploadFile = File(...),
     workspace_id: str = Form(...)
 ):
-    try:
-        result = await ingestion_service.ingest_file(
-            file.file,
-            file.filename,
-            workspace_id,
-            content_type=file.content_type
-        )
-        return result
-    except Exception as e:
-        logger.error(f"Ingestion failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+    result = await ingestion_service.ingest_file(
+        file.file,
+        file.filename,
+        workspace_id,
+        content_type=file.content_type
+    )
+    return result
 
 @app.get("/api/search", response_model=List[SearchResultDTO])
+@limiter.limit("20/minute")
 async def search_knowledge(
+    request: Request,
     q: str,
     workspaceId: str,
     limit: int = 10,
@@ -456,50 +430,43 @@ async def search_knowledge(
     """
     Vector search on ingested knowledge.
     """
-    try:
-        # Get query embedding
-        emb_service = get_embedding_service()
-        query_vector = await emb_service.embed_text(q)
+    # Get query embedding
+    emb_service = get_embedding_service()
+    query_vector = await emb_service.embed_text(q)
 
-        # Initialize Vector Index based on Environment
-        import os
-        db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
+    # Initialize Vector Index based on Environment
+    import os
+    db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
 
-        if db_url.startswith("sqlite"):
-            index = create_sqlite_index(connection_string=db_url, table_name="doc_chunks")
-        else:
-            index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
+    if db_url.startswith("sqlite"):
+        index = create_sqlite_index(connection_string=db_url, table_name="doc_chunks")
+    else:
+        index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
 
-        # Search
-        # Filter by tenant
-        from framework.retrieval.vector_search import SearchFilter
-        filters = SearchFilter(tenant_id=workspaceId)
+    # Search
+    # Filter by tenant
+    from framework.retrieval.vector_search import SearchFilter
+    filters = SearchFilter(tenant_id=workspaceId)
 
-        results = await query_vector_index(
-            query_vector,
-            index,
-            top_k=limit,
-            filters=filters
-        )
+    results = await query_vector_index(
+        query_vector,
+        index,
+        top_k=limit,
+        filters=filters
+    )
 
-        # Convert to DTO
-        dtos = []
-        for r in results:
-            dtos.append(SearchResultDTO(
-                id=str(r.id),
-                score=r.score,
-                content=r.content,
-                source=r.metadata.get("source") or "unknown",
-                chunk_index=r.metadata.get("chunk_index") or 0
-            ))
+    # Convert to DTO
+    dtos = []
+    for r in results:
+        dtos.append(SearchResultDTO(
+            id=str(r.id),
+            score=r.score,
+            content=r.content,
+            source=r.metadata.get("source") or "unknown",
+            chunk_index=r.metadata.get("chunk_index") or 0
+        ))
 
-        return dtos
-
-    except Exception as e:
-        logger.error("search_failed", error=str(e))
-        # Return empty list on failure gracefully for UI? Or raise?
-        # Let's raise for visibility
-        raise HTTPException(status_code=500, detail=str(e))
+    return dtos
 
 @app.get("/api/metrics", response_model=List[MetricPoint])
 def get_metrics(db=Depends(get_db)):
@@ -509,78 +476,70 @@ def get_metrics(db=Depends(get_db)):
     if db is None:
         return []
 
-    try:
-        # Simplified: Get all runs in last 24h
-        cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
-        runs = db.query(AgentRun).filter(AgentRun.started_at >= cutoff).all()
+    # Simplified: Get all runs in last 24h
+    cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
+    runs = db.query(AgentRun).filter(AgentRun.started_at >= cutoff).all()
 
-        if not runs:
-            # Return at least empty structure
-            return [
-                MetricPoint(time="00:00", success=0, failure=0),
-                MetricPoint(time="06:00", success=0, failure=0),
-                MetricPoint(time="12:00", success=0, failure=0),
-                MetricPoint(time="18:00", success=0, failure=0),
-            ]
+    if not runs:
+        # Return at least empty structure
+        return [
+            MetricPoint(time="00:00", success=0, failure=0),
+            MetricPoint(time="06:00", success=0, failure=0),
+            MetricPoint(time="12:00", success=0, failure=0),
+            MetricPoint(time="18:00", success=0, failure=0),
+        ]
 
-        # Bucket manually
-        buckets = {}
-        for r in runs:
-            if not r.started_at: continue
-            # Bucket by 4 hours
-            hour = r.started_at.hour
-            bucket_hour = (hour // 4) * 4
-            key = f"{bucket_hour:02d}:00"
+    # Bucket manually
+    buckets = {}
+    for r in runs:
+        if not r.started_at: continue
+        # Bucket by 4 hours
+        hour = r.started_at.hour
+        bucket_hour = (hour // 4) * 4
+        key = f"{bucket_hour:02d}:00"
 
-            if key not in buckets: buckets[key] = {"success": 0, "failure": 0}
+        if key not in buckets: buckets[key] = {"success": 0, "failure": 0}
 
-            if r.success:
-                buckets[key]["success"] += 1
-            else:
-                buckets[key]["failure"] += 1
+        if r.success:
+            buckets[key]["success"] += 1
+        else:
+            buckets[key]["failure"] += 1
 
-        result = []
-        # Ensure order
-        for h in range(0, 24, 4):
-            key = f"{h:02d}:00"
-            data = buckets.get(key, {"success": 0, "failure": 0})
-            result.append(MetricPoint(time=key, success=data["success"], failure=data["failure"]))
+    result = []
+    # Ensure order
+    for h in range(0, 24, 4):
+        key = f"{h:02d}:00"
+        data = buckets.get(key, {"success": 0, "failure": 0})
+        result.append(MetricPoint(time=key, success=data["success"], failure=data["failure"]))
 
-        return result
-    except Exception as e:
-        logger.error("fetching_metrics_failed", error=str(e))
-        return []
+    return result
 
 @app.get("/api/runs", response_model=List[RunLogDTO])
 def get_runs(workspaceId: Optional[str] = None, limit: int = 50, db=Depends(get_db)):
     if db is None:
         return []
 
-    try:
-        query = db.query(AgentRun)
-        if workspaceId:
-            query = query.filter(AgentRun.tenant_id == uuid.UUID(workspaceId))
+    query = db.query(AgentRun)
+    if workspaceId:
+        query = query.filter(AgentRun.tenant_id == uuid.UUID(workspaceId))
 
-        runs = query.order_by(desc(AgentRun.started_at)).limit(limit).all()
+    runs = query.order_by(desc(AgentRun.started_at)).limit(limit).all()
 
-        dtos = []
-        for r in runs:
-            # Convert DB model to DTO
-            dtos.append(RunLogDTO(
-                run_id=str(r.id),
-                agent=r.agent_id,
-                timestamp=r.started_at.isoformat() if r.started_at else "",
-                status="SUCCESS" if r.success else "FAILURE",
-                input_preview=r.task[:50] + "..." if r.task else "",
-                output_preview=str(r.solution)[:50] + "..." if r.solution else (r.feedback[:50] if r.feedback else ""),
-                duration_ms=r.duration_ms or 0,
-                workspace_id=str(r.tenant_id),
-                logs=[] # Logs not currently stored in AgentRun explicitly as list
-            ))
-        return dtos
-    except Exception as e:
-        logger.error("fetching_runs_failed", error=str(e))
-        return []
+    dtos = []
+    for r in runs:
+        # Convert DB model to DTO
+        dtos.append(RunLogDTO(
+            run_id=str(r.id),
+            agent=r.agent_id,
+            timestamp=r.started_at.isoformat() if r.started_at else "",
+            status="SUCCESS" if r.success else "FAILURE",
+            input_preview=r.task[:50] + "..." if r.task else "",
+            output_preview=str(r.solution)[:50] + "..." if r.solution else (r.feedback[:50] if r.feedback else ""),
+            duration_ms=r.duration_ms or 0,
+            workspace_id=str(r.tenant_id),
+            logs=[] # Logs not currently stored in AgentRun explicitly as list
+        ))
+    return dtos
 
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
