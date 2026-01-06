@@ -46,10 +46,12 @@ from sqlalchemy import (
     String,
     Text,
     UniqueConstraint,
+    JSON
 )
 from sqlalchemy.dialects.postgresql import ARRAY, JSONB, UUID
 from sqlalchemy.orm import declarative_base, relationship
 from sqlalchemy.sql import func
+from sqlalchemy.types import TypeDecorator, CHAR, TypeEngine
 
 # pgvector support - install with: pip install pgvector sqlalchemy
 try:
@@ -70,6 +72,63 @@ except ImportError:
             return _TextFallback()
     
     Vector = _VectorFallback  # type: ignore
+
+# SQLite Compat Helpers
+class GUID(TypeDecorator):
+    """Platform-independent GUID type.
+    Uses PostgreSQL's UUID type, otherwise uses
+    CHAR(32), storing as stringified hex values.
+    """
+    impl = CHAR
+    cache_ok = True
+
+    def load_dialect_impl(self, dialect):
+        if dialect.name == 'postgresql':
+            return dialect.type_descriptor(UUID())
+        else:
+            return dialect.type_descriptor(CHAR(36))
+
+    def process_bind_param(self, value, dialect):
+        if value is None:
+            return value
+        elif dialect.name == 'postgresql':
+            return str(value)
+        else:
+            if not isinstance(value, str):
+                return str(value)
+            return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return value
+        else:
+            if not isinstance(value, uuid4().__class__):
+                import uuid
+                return uuid.UUID(value)
+            return value
+
+# Fallback for ARRAY in SQLite (store as JSON)
+class JSONList(TypeDecorator):
+    impl = JSON
+    cache_ok = True
+
+    def process_bind_param(self, value, dialect):
+        return value
+
+    def process_result_value(self, value, dialect):
+        if value is None:
+            return []
+        return value
+
+def get_json_type(dialect_name):
+    if dialect_name == 'postgresql':
+        return JSONB
+    return JSON
+
+def get_array_type(dialect_name, inner_type=String):
+    if dialect_name == 'postgresql':
+        return ARRAY(inner_type)
+    return JSONList # Fallback to JSON list
 
 Base = declarative_base()
 
@@ -218,12 +277,12 @@ class Tenant(Base):
     """
     __tablename__ = "tenants"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
+    id = Column(GUID, primary_key=True, default=uuid4)
     name = Column(String(255), nullable=False, unique=True)
     description = Column(Text, nullable=True)
 
     # Settings
-    settings = Column(JSONB, default={})
+    settings = Column(JSON, default={})
     is_active = Column(Boolean, default=True)
 
     # Timestamps
@@ -247,8 +306,8 @@ class Repository(Base):
     """
     __tablename__ = "repositories"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Repository identification
     name = Column(String(255), nullable=False, index=True)
@@ -265,7 +324,7 @@ class Repository(Base):
     file_count = Column(Integer, default=0)
     total_lines = Column(Integer, default=0)
     total_tokens = Column(Integer, default=0)
-    languages = Column(ARRAY(String), default=[])
+    languages = Column(JSONList, default=[])
 
     # Status
     is_active = Column(Boolean, default=True)
@@ -274,8 +333,8 @@ class Repository(Base):
 
     # Metadata
     description = Column(Text, nullable=True)
-    tags = Column(ARRAY(String), default=[])
-    extra_data = Column("metadata", JSONB, default={})
+    tags = Column(JSONList, default=[])
+    extra_data = Column("metadata", JSON, default={})
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -308,9 +367,9 @@ class Resource(Base):
     """
     __tablename__ = "resources"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    repository_id = Column(UUID(as_uuid=True), ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
+    repository_id = Column(GUID, ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # File identification
     file_path = Column(String(1000), nullable=False)
@@ -334,7 +393,7 @@ class Resource(Base):
     # Security flags
     has_pii = Column(Boolean, default=False, index=True, comment="Contains PII/sensitive data")
     has_secrets = Column(Boolean, default=False, index=True, comment="Contains API keys/secrets")
-    security_flags = Column(ARRAY(String), default=[], comment="Specific security concerns found")
+    security_flags = Column(JSONList, default=[], comment="Specific security concerns found")
 
     # Status
     is_active = Column(Boolean, default=True)
@@ -342,7 +401,7 @@ class Resource(Base):
     parse_error = Column(Text, nullable=True)
 
     # Metadata
-    extra_data = Column("metadata", JSONB, default={})
+    extra_data = Column("metadata", JSON, default={})
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -380,11 +439,11 @@ class ResourceDependency(Base):
     """
     __tablename__ = "resource_dependencies"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
 
-    source_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="CASCADE"), nullable=False, index=True)
-    target_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_id = Column(GUID, ForeignKey("resources.id", ondelete="CASCADE"), nullable=False, index=True)
+    target_id = Column(GUID, ForeignKey("resources.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Dependency details
     dependency_type = Column(String(50), nullable=False, comment="import, include, extends, uses")
@@ -392,7 +451,7 @@ class ResourceDependency(Base):
     line_number = Column(Integer, nullable=True)
 
     # Metadata
-    extra_data = Column("metadata", JSONB, default={})
+    extra_data = Column("metadata", JSON, default={})
     created_at = Column(DateTime(timezone=True), server_default=func.now())
 
     # Relationships
@@ -430,16 +489,16 @@ class Operation(Base):
     """
     __tablename__ = "operations"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Operation identification
     op_type = Column(Enum(OperationTypeEnum), nullable=False, index=True)
     input_hash = Column(String(64), nullable=False, index=True, comment="SHA-256 of normalized inputs")
 
     # Input/Output
-    inputs = Column(JSONB, nullable=False, comment="Full input parameters")
-    outputs = Column(JSONB, nullable=True, comment="Operation results/outputs")
+    inputs = Column(JSON, nullable=False, comment="Full input parameters")
+    outputs = Column(JSON, nullable=True, comment="Operation results/outputs")
 
     # Status tracking
     status = Column(
@@ -459,19 +518,19 @@ class Operation(Base):
     duration_ms = Column(Integer, nullable=True)
 
     # Resource references (optional, for context)
-    repository_id = Column(UUID(as_uuid=True), ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True)
-    resource_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="SET NULL"), nullable=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    repository_id = Column(GUID, ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True)
+    resource_id = Column(GUID, ForeignKey("resources.id", ondelete="SET NULL"), nullable=True)
+    document_id = Column(GUID, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
 
     # Correlation for tracing
     correlation_id = Column(String(64), nullable=True, index=True, comment="For tracing related operations")
-    parent_operation_id = Column(UUID(as_uuid=True), ForeignKey("operations.id"), nullable=True)
+    parent_operation_id = Column(GUID, ForeignKey("operations.id"), nullable=True)
 
     # Agent context
     agent_id = Column(String(100), nullable=True, index=True)
 
     # Metadata
-    extra_data = Column("metadata", JSONB, default={})
+    extra_data = Column("metadata", JSON, default={})
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -545,11 +604,11 @@ class Document(Base):
     """
     __tablename__ = "documents"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Source reference
-    source_resource_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_resource_id = Column(GUID, ForeignKey("resources.id", ondelete="SET NULL"), nullable=True, index=True)
 
     # Document identification
     title = Column(String(500), nullable=False, index=True)
@@ -571,12 +630,12 @@ class Document(Base):
     has_pii = Column(Boolean, default=False, index=True)
 
     # Tags and metadata
-    tags = Column(ARRAY(String), default=[])
-    extra_data = Column("metadata", JSONB, default={})
+    tags = Column(JSONList, default=[])
+    extra_data = Column("metadata", JSON, default={})
 
     # Versioning
     version = Column(Integer, default=1)
-    parent_id = Column(UUID(as_uuid=True), ForeignKey("documents.id"), nullable=True)
+    parent_id = Column(GUID, ForeignKey("documents.id"), nullable=True)
 
     # Processing status
     is_chunked = Column(Boolean, default=False)
@@ -608,8 +667,8 @@ class Document(Base):
         Index("idx_doc_type", "doc_type"),
         Index("idx_doc_source", "source"),
         Index("idx_doc_created", "created_at"),
-        Index("idx_doc_tags", "tags", postgresql_using="gin"),
-        Index("idx_doc_metadata", "metadata", postgresql_using="gin"),
+        # Index("idx_doc_tags", "tags", postgresql_using="gin"), # GIN not supported in SQLite
+        # Index("idx_doc_metadata", "metadata", postgresql_using="gin"),
     )
 
     def __repr__(self):
@@ -625,9 +684,9 @@ class DocChunk(Base):
     """
     __tablename__ = "doc_chunks"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
+    document_id = Column(GUID, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Content
     content = Column(Text, nullable=False)
@@ -647,14 +706,14 @@ class DocChunk(Base):
         embedding = Column(Vector(384), nullable=True)
     else:
         # Fallback: store as JSONB array if pgvector not available
-        embedding = Column(JSONB, nullable=True, comment="Embedding vector as JSON array")
+        embedding = Column(JSON, nullable=True, comment="Embedding vector as JSON array")
 
     # Embedding metadata
     embedding_model = Column(String(100), nullable=True, comment="Model used for embedding")
     embedded_at = Column(DateTime(timezone=True), nullable=True)
 
     # Metadata
-    extra_data = Column("metadata", JSONB, default={})
+    extra_data = Column("metadata", JSON, default={})
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -687,9 +746,9 @@ class Artifact(Base):
     """
     __tablename__ = "artifacts"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    operation_id = Column(UUID(as_uuid=True), ForeignKey("operations.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
+    operation_id = Column(GUID, ForeignKey("operations.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Artifact identification
     artifact_type = Column(Enum(ArtifactTypeEnum), nullable=False, index=True)
@@ -697,14 +756,14 @@ class Artifact(Base):
     description = Column(Text, nullable=True)
 
     # Content (either inline or reference)
-    content = Column(JSONB, nullable=True, comment="Artifact content if small enough")
+    content = Column(JSON, nullable=True, comment="Artifact content if small enough")
     file_path = Column(String(1000), nullable=True, comment="Path to artifact file if stored externally")
     file_size_bytes = Column(Integer, nullable=True)
     content_hash = Column(String(64), nullable=True)
 
     # Source references
-    source_document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
-    source_resource_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="SET NULL"), nullable=True)
+    source_document_id = Column(GUID, ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    source_resource_id = Column(GUID, ForeignKey("resources.id", ondelete="SET NULL"), nullable=True)
 
     # Quality metrics
     quality_score = Column(Float, nullable=True, comment="Quality assessment 0-1")
@@ -715,7 +774,7 @@ class Artifact(Base):
     last_used_at = Column(DateTime(timezone=True), nullable=True)
 
     # Metadata
-    extra_data = Column("metadata", JSONB, default={})
+    extra_data = Column("metadata", JSON, default={})
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -753,25 +812,25 @@ class Decision(Base):
     """
     __tablename__ = "decisions"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    operation_id = Column(UUID(as_uuid=True), ForeignKey("operations.id", ondelete="CASCADE"), nullable=True, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
+    operation_id = Column(GUID, ForeignKey("operations.id", ondelete="CASCADE"), nullable=True, index=True)
 
     # Decision identification
     agent_id = Column(String(100), nullable=False, index=True)
     decision_type = Column(Enum(DecisionTypeEnum), nullable=False, index=True)
 
     # Context
-    context = Column(JSONB, nullable=False, comment="Input context for the decision")
-    options_considered = Column(JSONB, nullable=True, comment="List of options evaluated")
+    context = Column(JSON, nullable=False, comment="Input context for the decision")
+    options_considered = Column(JSON, nullable=True, comment="List of options evaluated")
 
     # Decision made
-    decision = Column(JSONB, nullable=False, comment="The actual decision made")
+    decision = Column(JSON, nullable=False, comment="The actual decision made")
     reasoning = Column(Text, nullable=True, comment="Explanation of why this decision")
     confidence = Column(Float, nullable=True, comment="Confidence in the decision 0-1")
 
     # Outcome (filled in later)
-    outcome = Column(JSONB, nullable=True, comment="Result of the decision")
+    outcome = Column(JSON, nullable=True, comment="Result of the decision")
     outcome_score = Column(Float, nullable=True, comment="Quality of outcome 0-1")
     was_correct = Column(Boolean, nullable=True, comment="Whether decision was correct in hindsight")
     feedback = Column(Text, nullable=True)
@@ -782,7 +841,7 @@ class Decision(Base):
     decision_latency_ms = Column(Integer, nullable=True, comment="Time to make decision")
 
     # Metadata
-    extra_data = Column("metadata", JSONB, default={})
+    extra_data = Column("metadata", JSON, default={})
 
     # Relationships
     tenant = relationship("Tenant", backref="decisions")
@@ -808,9 +867,9 @@ class DocumentSummary(Base):
     """Generated summaries for documents."""
     __tablename__ = "document_summaries"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
+    document_id = Column(GUID, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Summary content
     one_sentence = Column(Text, nullable=True)
@@ -819,7 +878,7 @@ class DocumentSummary(Base):
 
     # Generation metadata
     model_used = Column(String(100), nullable=True)
-    generation_params = Column(JSONB, nullable=True)
+    generation_params = Column(JSON, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -838,9 +897,9 @@ class DocumentEntity(Base):
     """Named entities extracted from documents."""
     __tablename__ = "document_entities"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
+    document_id = Column(GUID, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Entity details
     text = Column(String(500), nullable=False, index=True)
@@ -872,14 +931,14 @@ class DocumentTopic(Base):
     """Topics identified in documents."""
     __tablename__ = "document_topics"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
+    document_id = Column(GUID, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Topic details
     topic_id = Column(Integer, nullable=False, comment="Topic cluster ID from BERTopic")
     name = Column(String(255), nullable=True)
-    keywords = Column(ARRAY(String), default=[])
+    keywords = Column(JSONList, default=[])
 
     # Confidence
     probability = Column(Float, nullable=True)
@@ -902,9 +961,9 @@ class DocumentConcept(Base):
     """Key concepts extracted from documents."""
     __tablename__ = "document_concepts"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
+    document_id = Column(GUID, ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Concept details
     concept = Column(String(255), nullable=False, index=True)
@@ -932,8 +991,8 @@ class AgentRun(Base):
     """Log of agent task executions and outcomes."""
     __tablename__ = "agent_runs"
 
-    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Task info
     agent_id = Column(String(100), nullable=False, index=True)
@@ -944,7 +1003,7 @@ class AgentRun(Base):
     # Outcome
     success = Column(Boolean, nullable=False, index=True)
     score = Column(Float, nullable=True)
-    solution = Column(JSONB, nullable=True)
+    solution = Column(JSON, nullable=True)
     feedback = Column(Text, nullable=True)
 
     # Timing
@@ -953,8 +1012,8 @@ class AgentRun(Base):
     duration_ms = Column(Integer, nullable=True)
 
     # Context
-    context = Column(JSONB, nullable=True)
-    tools_used = Column(ARRAY(String), default=[])
+    context = Column(JSON, nullable=True)
+    tools_used = Column(JSONList, default=[])
     model_version = Column(String(50), nullable=True)
 
     # Usage tracking
@@ -963,10 +1022,10 @@ class AgentRun(Base):
 
     # Consolidation
     consolidated = Column(Boolean, default=False)
-    parent_id = Column(UUID(as_uuid=True), ForeignKey("agent_runs.id"), nullable=True)
+    parent_id = Column(GUID, ForeignKey("agent_runs.id"), nullable=True)
 
     # Metadata
-    extra_data = Column("metadata", JSONB, default={})
+    extra_data = Column("metadata", JSON, default={})
 
     # Relationships
     tenant = relationship("Tenant", backref="agent_runs")
@@ -988,8 +1047,8 @@ class KnowledgeNode(Base):
     """Cross-agent knowledge nodes for shared intelligence."""
     __tablename__ = "knowledge_nodes"
 
-    node_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    node_id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
 
     agent_id = Column(String(100), nullable=False, index=True)
 
@@ -1000,7 +1059,7 @@ class KnowledgeNode(Base):
     # Content
     title = Column(String(500), nullable=False, index=True)
     content = Column(Text, nullable=False)
-    tags = Column(ARRAY(String), default=[])
+    tags = Column(JSONList, default=[])
     problem_domain = Column(String(100), nullable=True, index=True)
 
     # Versioning
@@ -1012,17 +1071,17 @@ class KnowledgeNode(Base):
     relevance_score = Column(Float, default=1.0)
 
     # Sharing
-    shared_with = Column(ARRAY(String), default=[])
+    shared_with = Column(JSONList, default=[])
 
     # Context
-    prerequisites = Column(ARRAY(String), default=[])
-    related_nodes = Column(ARRAY(String), default=[])
+    prerequisites = Column(JSONList, default=[])
+    related_nodes = Column(JSONList, default=[])
 
     # Embedding
     if PGVECTOR_AVAILABLE:
         embedding = Column(Vector(384), nullable=True)
     else:
-        embedding = Column(JSONB, nullable=True)
+        embedding = Column(JSON, nullable=True)
 
     # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
@@ -1047,7 +1106,7 @@ class KnowledgeNode(Base):
         Index("idx_knode_tenant", "tenant_id"),
         Index("idx_knode_type_scope", "knowledge_type", "scope"),
         Index("idx_knode_domain", "problem_domain"),
-        Index("idx_knode_tags", "tags", postgresql_using="gin"),
+        # Index("idx_knode_tags", "tags", postgresql_using="gin"),
     )
 
 
@@ -1055,11 +1114,11 @@ class KnowledgeEdge(Base):
     """Relationships between knowledge nodes."""
     __tablename__ = "knowledge_edges"
 
-    edge_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
-    tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
+    edge_id = Column(GUID, primary_key=True, default=uuid4)
+    tenant_id = Column(GUID, ForeignKey("tenants.id"), nullable=False, index=True)
 
-    from_node_id = Column(UUID(as_uuid=True), ForeignKey("knowledge_nodes.node_id", ondelete="CASCADE"), nullable=False, index=True)
-    to_node_id = Column(UUID(as_uuid=True), ForeignKey("knowledge_nodes.node_id", ondelete="CASCADE"), nullable=False, index=True)
+    from_node_id = Column(GUID, ForeignKey("knowledge_nodes.node_id", ondelete="CASCADE"), nullable=False, index=True)
+    to_node_id = Column(GUID, ForeignKey("knowledge_nodes.node_id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Relationship details
     edge_type = Column("relationship", String(50), nullable=False, index=True)

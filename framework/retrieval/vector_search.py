@@ -938,6 +938,134 @@ class ChromaDBIndex(VectorIndex):
 
 
 # =============================================================================
+# SQLite Index Adapter (Fallback)
+# =============================================================================
+
+class SQLiteVectorIndex(VectorIndex):
+    """
+    Vector index fallback for SQLite.
+    Performs full table scan and in-memory cosine similarity.
+    Suitable for small datasets or development environments.
+    """
+
+    def __init__(
+        self,
+        connection_string: Optional[str] = None,
+        table_name: str = "doc_chunks",
+    ):
+        self.connection_string = connection_string
+        self.table_name = table_name
+        self._engine = None
+
+    async def _ensure_engine(self) -> None:
+        if self._engine is not None:
+            return
+
+        from sqlalchemy import create_engine
+        self._engine = create_engine(self.connection_string)
+
+    async def add(
+        self,
+        id: str,
+        embedding: List[float],
+        content: str,
+        metadata: Optional[Dict[str, Any]] = None,
+    ) -> None:
+        """Add a vector to the index (Handled by main DB insert logic typically)."""
+        # In this architecture, insertion happens via ORM elsewhere.
+        # This method is here to satisfy interface if used directly.
+        pass
+
+    async def search(
+        self,
+        query_vector: List[float],
+        top_k: int = 10,
+        filters: Optional[SearchFilter] = None,
+    ) -> List[VectorSearchResult]:
+        """Search for similar vectors using in-memory cosine similarity."""
+        await self._ensure_engine()
+
+        import json
+        from sqlalchemy import text
+
+        # Query all chunks (potentially expensive, but necessary for SQLite fallback)
+        # Note: In a real app, we might limit by tenant_id first to reduce load
+
+        filter_clauses = []
+        params = {}
+
+        if filters:
+            if filters.tenant_id:
+                filter_clauses.append(f"tenant_id = :tenant_id")
+                params["tenant_id"] = filters.tenant_id
+
+        where_sql = ""
+        if filter_clauses:
+            where_sql = "WHERE " + " AND ".join(filter_clauses)
+
+        query = text(f"SELECT id, content, embedding, metadata FROM {self.table_name} {where_sql}")
+
+        results = []
+
+        with self._engine.connect() as conn:
+            rows = conn.execute(query, params)
+
+            for row in rows:
+                row_id = row.id
+                content = row.content
+                embedding_json = row.embedding
+                metadata = row.metadata
+
+                if not embedding_json:
+                    continue
+
+                # Deserialize embedding
+                if isinstance(embedding_json, str):
+                    try:
+                        embedding = json.loads(embedding_json)
+                    except:
+                        continue
+                elif isinstance(embedding_json, list):
+                    embedding = embedding_json
+                else:
+                    continue
+
+                # Compute similarity
+                score = compute_similarity(query_vector, embedding)
+
+                # Normalize metadata
+                if isinstance(metadata, str):
+                    try:
+                        metadata = json.loads(metadata)
+                    except:
+                        metadata = {}
+                elif metadata is None:
+                    metadata = {}
+
+                results.append(VectorSearchResult(
+                    id=str(row_id),
+                    content=content,
+                    score=score,
+                    metadata=metadata,
+                    source=metadata.get("source"),
+                    chunk_index=metadata.get("chunk_index"),
+                ))
+
+        # Sort by score descending and return top_k
+        results.sort(key=lambda x: x.score, reverse=True)
+        return results[:top_k]
+
+    async def delete(self, id: str) -> bool:
+        return False # Not implemented for fallback
+
+    async def count(self) -> int:
+        await self._ensure_engine()
+        from sqlalchemy import text
+        with self._engine.connect() as conn:
+            return conn.execute(text(f"SELECT COUNT(*) FROM {self.table_name}")).scalar()
+
+
+# =============================================================================
 # Unified Query Function
 # =============================================================================
 
@@ -1109,4 +1237,14 @@ def create_chromadb_index(
     return ChromaDBIndex(
         collection_name=collection_name,
         persist_directory=persist_directory,
+    )
+
+def create_sqlite_index(
+    connection_string: str,
+    table_name: str = "doc_chunks",
+) -> SQLiteVectorIndex:
+    """Create a SQLite vector index."""
+    return SQLiteVectorIndex(
+        connection_string=connection_string,
+        table_name=table_name,
     )

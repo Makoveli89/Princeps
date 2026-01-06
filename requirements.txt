@@ -27,3 +27,6 @@ pypdf
 supabase
 alembic
 streamlit
+pypdf
+python-multipart
+python-dotenv
