@@ -9,11 +9,11 @@ for working with the brain layer PostgreSQL database.
 
 Usage:
     from db import get_engine, get_session, init_db
-    
+
     # Initialize database
     engine = get_engine()
     init_db(engine)
-    
+
     # Use session
     with get_session() as session:
         repo = Repository(name="test", url="https://...")
@@ -41,10 +41,11 @@ from .models import Base, Operation, OperationStatusEnum, OperationTypeEnum
 # CONFIGURATION
 # =============================================================================
 
+
 def get_database_url() -> str:
     """
     Get database URL from environment or default.
-    
+
     Environment variables (in order of precedence):
     - DATABASE_URL: Full connection string
     - POSTGRES_* variables: Individual connection parameters
@@ -79,13 +80,13 @@ def get_engine(
 ) -> Engine:
     """
     Get or create the SQLAlchemy engine.
-    
+
     Args:
         url: Database URL (uses get_database_url() if not provided)
         pool_size: Number of connections in the pool
         max_overflow: Max connections above pool_size
         echo: Enable SQL logging
-        
+
     Returns:
         SQLAlchemy Engine instance
     """
@@ -94,9 +95,9 @@ def get_engine(
     if _engine is None:
         db_url = url or get_database_url()
         is_sqlite = db_url.startswith("sqlite")
-        
+
         engine_kwargs = {"echo": echo}
-        
+
         if is_sqlite:
             # SQLite-specific settings
             engine_kwargs["connect_args"] = {"check_same_thread": False}
@@ -107,7 +108,7 @@ def get_engine(
             engine_kwargs["max_overflow"] = max_overflow
             engine_kwargs["pool_pre_ping"] = True
             engine_kwargs["connect_args"] = {"prepare_threshold": None}
-        
+
         _engine = create_engine(db_url, **engine_kwargs)
 
     return _engine
@@ -131,7 +132,7 @@ def get_session_factory(engine: Engine | None = None) -> sessionmaker:
 def get_session() -> Generator[Session, None, None]:
     """
     Context manager for database sessions.
-    
+
     Usage:
         with get_session() as session:
             results = session.query(Document).all()
@@ -151,10 +152,11 @@ def get_session() -> Generator[Session, None, None]:
 # DATABASE INITIALIZATION
 # =============================================================================
 
+
 def init_db(engine: Engine | None = None) -> None:
     """
     Initialize the database schema.
-    
+
     Creates all tables and enables required extensions.
     For production, use Alembic migrations instead.
     """
@@ -162,13 +164,13 @@ def init_db(engine: Engine | None = None) -> None:
 
     # Check if using PostgreSQL (extensions only available there)
     is_postgres = str(engine.url).startswith("postgresql")
-    
+
     if is_postgres:
         # Enable PostgreSQL extensions
         with engine.connect() as conn:
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector"))
             conn.execute(text("CREATE EXTENSION IF NOT EXISTS pg_trgm"))
-            conn.execute(text("CREATE EXTENSION IF NOT EXISTS \"uuid-ossp\""))
+            conn.execute(text('CREATE EXTENSION IF NOT EXISTS "uuid-ossp"'))
             conn.commit()
 
     # Create all tables
@@ -178,7 +180,7 @@ def init_db(engine: Engine | None = None) -> None:
 def drop_all_tables(engine: Engine | None = None) -> None:
     """
     Drop all tables. USE WITH CAUTION!
-    
+
     Only for development/testing.
     """
     engine = engine or get_engine()
@@ -189,56 +191,54 @@ def drop_all_tables(engine: Engine | None = None) -> None:
 # IDEMPOTENCY HELPERS
 # =============================================================================
 
+
 def compute_input_hash(op_type: str, inputs: dict[str, Any]) -> str:
     """
     Compute deterministic hash of operation inputs for idempotency.
-    
+
     This is a simple implementation for basic use cases. For advanced
     features like path normalization and field exclusion, use
     brain.resilience.idempotency_service.compute_input_hash instead.
-    
+
     Args:
         op_type: The operation type string
         inputs: Dictionary of input parameters
-        
+
     Returns:
         SHA-256 hash (64 char hex string)
     """
     # Sort keys for deterministic ordering
-    normalized = json.dumps({
-        "op_type": op_type,
-        "inputs": inputs
-    }, sort_keys=True, default=str)
+    normalized = json.dumps({"op_type": op_type, "inputs": inputs}, sort_keys=True, default=str)
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
 def get_or_create_operation(
-    session: Session,
-    tenant_id: str,
-    op_type: OperationTypeEnum,
-    inputs: dict[str, Any],
-    **kwargs
+    session: Session, tenant_id: str, op_type: OperationTypeEnum, inputs: dict[str, Any], **kwargs
 ) -> tuple[Operation, bool]:
     """
     Get existing operation or create new one (idempotency pattern).
-    
+
     Args:
         session: Database session
         tenant_id: Tenant UUID
         op_type: Operation type enum
         inputs: Operation input parameters
         **kwargs: Additional operation fields
-        
+
     Returns:
         Tuple of (Operation, created) where created is True if new
     """
     input_hash = compute_input_hash(op_type.value, inputs)
 
     # Try to find existing operation
-    existing = session.query(Operation).filter(
-        Operation.op_type == op_type,
-        Operation.input_hash == input_hash,
-    ).first()
+    existing = (
+        session.query(Operation)
+        .filter(
+            Operation.op_type == op_type,
+            Operation.input_hash == input_hash,
+        )
+        .first()
+    )
 
     if existing:
         return existing, False
@@ -250,7 +250,7 @@ def get_or_create_operation(
         input_hash=input_hash,
         inputs=inputs,
         status=OperationStatusEnum.PENDING,
-        **kwargs
+        **kwargs,
     )
     session.add(operation)
     session.flush()  # Get the ID
@@ -260,18 +260,16 @@ def get_or_create_operation(
 
 def mark_operation_started(session: Session, operation_id: str) -> None:
     """Mark an operation as in progress."""
-    session.query(Operation).filter(
-        Operation.id == operation_id
-    ).update({
-        "status": OperationStatusEnum.IN_PROGRESS,
-        "started_at": datetime.utcnow(),
-    })
+    session.query(Operation).filter(Operation.id == operation_id).update(
+        {
+            "status": OperationStatusEnum.IN_PROGRESS,
+            "started_at": datetime.utcnow(),
+        }
+    )
 
 
 def mark_operation_success(
-    session: Session,
-    operation_id: str,
-    outputs: dict | None = None
+    session: Session, operation_id: str, outputs: dict | None = None
 ) -> None:
     """Mark an operation as successful."""
     now = datetime.utcnow()
@@ -286,16 +284,11 @@ def mark_operation_success(
     if op and op.started_at:
         updates["duration_ms"] = int((now - op.started_at).total_seconds() * 1000)
 
-    session.query(Operation).filter(
-        Operation.id == operation_id
-    ).update(updates)
+    session.query(Operation).filter(Operation.id == operation_id).update(updates)
 
 
 def mark_operation_failed(
-    session: Session,
-    operation_id: str,
-    error_message: str,
-    traceback: str | None = None
+    session: Session, operation_id: str, error_message: str, traceback: str | None = None
 ) -> None:
     """Mark an operation as failed."""
     now = datetime.utcnow()
@@ -312,14 +305,13 @@ def mark_operation_failed(
         if op.started_at:
             updates["duration_ms"] = int((now - op.started_at).total_seconds() * 1000)
 
-    session.query(Operation).filter(
-        Operation.id == operation_id
-    ).update(updates)
+    session.query(Operation).filter(Operation.id == operation_id).update(updates)
 
 
 # =============================================================================
 # TENANT HELPERS
 # =============================================================================
+
 
 def get_default_tenant_id(session: Session) -> str:
     """Get or create the default tenant ID."""
@@ -340,6 +332,7 @@ def get_default_tenant_id(session: Session) -> str:
 # CONTENT HASH HELPERS
 # =============================================================================
 
+
 def compute_content_hash(content: str) -> str:
     """Compute SHA-256 hash of content for deduplication."""
     return hashlib.sha256(content.encode()).hexdigest()
@@ -358,6 +351,7 @@ def compute_file_hash(file_path: str) -> str:
 # VECTOR SEARCH HELPERS
 # =============================================================================
 
+
 def similarity_search_chunks(
     session: Session,
     query_embedding: list[float],
@@ -367,14 +361,14 @@ def similarity_search_chunks(
 ) -> list[dict]:
     """
     Search for similar document chunks using pgvector.
-    
+
     Args:
         session: Database session
         query_embedding: 384-dim embedding vector
         tenant_id: Optional tenant filter
         document_id: Optional document filter
         limit: Max results
-        
+
     Returns:
         List of dicts with id, document_id, content, similarity
     """
@@ -392,12 +386,15 @@ def similarity_search_chunks(
         LIMIT :limit
     """)
 
-    result = session.execute(query, {
-        "embedding": embedding_str,
-        "tenant_id": tenant_id,
-        "document_id": document_id,
-        "limit": limit,
-    })
+    result = session.execute(
+        query,
+        {
+            "embedding": embedding_str,
+            "tenant_id": tenant_id,
+            "document_id": document_id,
+            "limit": limit,
+        },
+    )
 
     return [
         {
@@ -414,6 +411,7 @@ def similarity_search_chunks(
 # QUERY HELPERS
 # =============================================================================
 
+
 def list_repositories(
     session: Session,
     tenant_id: str,
@@ -424,7 +422,7 @@ def list_repositories(
 
     query = session.query(Repository).filter(Repository.tenant_id == tenant_id)
     if not include_inactive:
-        query = query.filter(Repository.is_active == True)
+        query = query.filter(Repository.is_active)
     return query.all()
 
 
@@ -465,6 +463,7 @@ def list_operations(
 # =============================================================================
 # TESTING UTILITIES
 # =============================================================================
+
 
 def create_test_engine(echo: bool = False) -> Engine:
     """Create an in-memory SQLite engine for testing."""

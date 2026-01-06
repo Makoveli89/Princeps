@@ -22,7 +22,7 @@ Tables Defined:
 Usage:
     from models import Base, Repository, Resource, Document, Operation
     from sqlalchemy import create_engine
-    
+
     engine = create_engine("postgresql://user:pass@localhost/princeps")
     Base.metadata.create_all(engine)
 """
@@ -54,21 +54,23 @@ from sqlalchemy.sql import func
 # pgvector support - install with: pip install pgvector sqlalchemy
 try:
     from pgvector.sqlalchemy import Vector
+
     PGVECTOR_AVAILABLE = True
 except ImportError:
     PGVECTOR_AVAILABLE = False
     # Create a placeholder that acts like a Column type but stores as Text
     # This allows code to run without pgvector, just without vector operations
     from sqlalchemy import Text as _TextFallback
-    
+
     class _VectorFallback:
         """Fallback for Vector type when pgvector is not available."""
+
         def __init__(self, dim: int = 384):
             self.dim = dim
-        
+
         def __call__(self, *args, **kwargs):
             return _TextFallback()
-    
+
     Vector = _VectorFallback  # type: ignore
 
 Base = declarative_base()
@@ -78,8 +80,10 @@ Base = declarative_base()
 # ENUMS - Type classifications for various entities
 # =============================================================================
 
+
 class OperationTypeEnum(enum.Enum):
     """Types of operations for idempotency tracking."""
+
     INGEST_REPO = "ingest_repo"
     INGEST_DOCUMENT = "ingest_document"
     CHUNK_DOCUMENT = "chunk_document"
@@ -96,6 +100,7 @@ class OperationTypeEnum(enum.Enum):
 
 class OperationStatusEnum(enum.Enum):
     """Status of an operation."""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     SUCCESS = "success"
@@ -105,6 +110,7 @@ class OperationStatusEnum(enum.Enum):
 
 class ResourceTypeEnum(enum.Enum):
     """Types of resources/files."""
+
     CODE_FILE = "code_file"
     DOCUMENT = "document"
     IMAGE = "image"
@@ -116,6 +122,7 @@ class ResourceTypeEnum(enum.Enum):
 
 class KnowledgeTypeEnum(enum.Enum):
     """Types of knowledge entries."""
+
     AGENT_OUTPUT = "agent_output"
     TASK_RESULT = "task_result"
     DATASET = "dataset"
@@ -130,6 +137,7 @@ class KnowledgeTypeEnum(enum.Enum):
 
 class SecurityLevelEnum(enum.Enum):
     """Security classification levels."""
+
     PUBLIC = "public"
     INTERNAL = "internal"
     CONFIDENTIAL = "confidential"
@@ -138,6 +146,7 @@ class SecurityLevelEnum(enum.Enum):
 
 class NodeKnowledgeTypeEnum(enum.Enum):
     """Cross-agent knowledge types."""
+
     SOLUTION = "solution"
     PATTERN = "pattern"
     INSIGHT = "insight"
@@ -148,6 +157,7 @@ class NodeKnowledgeTypeEnum(enum.Enum):
 
 class ShareScopeEnum(enum.Enum):
     """Knowledge sharing scope."""
+
     PRIVATE = "private"
     TEAM = "team"
     PUBLIC = "public"
@@ -155,6 +165,7 @@ class ShareScopeEnum(enum.Enum):
 
 class ArtifactTypeEnum(enum.Enum):
     """Types of generated artifacts."""
+
     EMBEDDING_INDEX = "embedding_index"
     SUMMARY = "summary"
     ENTITY_LIST = "entity_list"
@@ -166,6 +177,7 @@ class ArtifactTypeEnum(enum.Enum):
 
 class DecisionTypeEnum(enum.Enum):
     """Types of agent decisions."""
+
     TASK_SELECTION = "task_selection"
     TOOL_CHOICE = "tool_choice"
     ROUTING = "routing"
@@ -179,6 +191,7 @@ class DecisionTypeEnum(enum.Enum):
 # HELPER FUNCTIONS
 # =============================================================================
 
+
 def generate_uuid() -> str:
     """Generate a UUID string."""
     return str(uuid4())
@@ -187,22 +200,19 @@ def generate_uuid() -> str:
 def compute_input_hash(op_type: str, inputs: dict[str, Any]) -> str:
     """
     Compute deterministic hash of operation inputs for idempotency.
-    
+
     Note: For advanced idempotency with path normalization and config options,
     prefer using brain.resilience.idempotency_service.compute_input_hash.
-    
+
     Args:
         op_type: The operation type string
         inputs: Dictionary of input parameters
-        
+
     Returns:
         SHA-256 hash of normalized inputs
     """
     # Sort keys for deterministic ordering
-    normalized = json.dumps({
-        "op_type": op_type,
-        "inputs": inputs
-    }, sort_keys=True, default=str)
+    normalized = json.dumps({"op_type": op_type, "inputs": inputs}, sort_keys=True, default=str)
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
@@ -210,12 +220,14 @@ def compute_input_hash(op_type: str, inputs: dict[str, Any]) -> str:
 # TENANT & MULTI-TENANCY SUPPORT
 # =============================================================================
 
+
 class Tenant(Base):
     """
     Tenant/project for multi-tenancy support.
-    
+
     Every record in core tables includes a tenant_id for data isolation.
     """
+
     __tablename__ = "tenants"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -238,13 +250,15 @@ class Tenant(Base):
 # REPOSITORY - Git repository tracking
 # =============================================================================
 
+
 class Repository(Base):
     """
     Git repository metadata and tracking.
-    
+
     Stores information about ingested repositories including
     commit history tracking for incremental updates.
     """
+
     __tablename__ = "repositories"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -299,24 +313,33 @@ class Repository(Base):
 # RESOURCE - Files and assets
 # =============================================================================
 
+
 class Resource(Base):
     """
     Files/assets within repositories or standalone documents.
-    
+
     Represents individual files with their metadata, content hashes,
     and relationships to repositories and documents.
     """
+
     __tablename__ = "resources"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    repository_id = Column(UUID(as_uuid=True), ForeignKey("repositories.id", ondelete="CASCADE"), nullable=True, index=True)
+    repository_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("repositories.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
 
     # File identification
     file_path = Column(String(1000), nullable=False)
     file_name = Column(String(255), nullable=False, index=True)
     file_extension = Column(String(50), nullable=True, index=True)
-    resource_type = Column(Enum(ResourceTypeEnum), nullable=False, default=ResourceTypeEnum.CODE_FILE)
+    resource_type = Column(
+        Enum(ResourceTypeEnum), nullable=False, default=ResourceTypeEnum.CODE_FILE
+    )
 
     # Content tracking
     content_hash = Column(String(64), nullable=False, index=True, comment="SHA-256 of file content")
@@ -356,7 +379,7 @@ class Resource(Base):
         "ResourceDependency",
         foreign_keys="ResourceDependency.source_id",
         back_populates="source_resource",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (
@@ -375,16 +398,27 @@ class Resource(Base):
 class ResourceDependency(Base):
     """
     Dependency relationships between resources (imports, includes, etc.).
-    
+
     Captures the dependency graph for code analysis and impact assessment.
     """
+
     __tablename__ = "resource_dependencies"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
 
-    source_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="CASCADE"), nullable=False, index=True)
-    target_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="CASCADE"), nullable=False, index=True)
+    source_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("resources.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    target_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("resources.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Dependency details
     dependency_type = Column(String(50), nullable=False, comment="import, include, extends, uses")
@@ -397,37 +431,45 @@ class ResourceDependency(Base):
 
     # Relationships
     tenant = relationship("Tenant", backref="resource_dependencies")
-    source_resource = relationship("Resource", foreign_keys=[source_id], back_populates="dependencies")
+    source_resource = relationship(
+        "Resource", foreign_keys=[source_id], back_populates="dependencies"
+    )
     target_resource = relationship("Resource", foreign_keys=[target_id])
 
     __table_args__ = (
-        UniqueConstraint("source_id", "target_id", "dependency_type", name="uq_resource_dependency"),
+        UniqueConstraint(
+            "source_id", "target_id", "dependency_type", name="uq_resource_dependency"
+        ),
         Index("idx_dep_source", "source_id"),
         Index("idx_dep_target", "target_id"),
     )
 
     def __repr__(self):
-        return f"<ResourceDependency({self.source_id} --{self.dependency_type}--> {self.target_id})>"
+        return (
+            f"<ResourceDependency({self.source_id} --{self.dependency_type}--> {self.target_id})>"
+        )
 
 
 # =============================================================================
 # OPERATION - Idempotent operation tracking
 # =============================================================================
 
+
 class Operation(Base):
     """
     Idempotent operation tracking with input hashing.
-    
+
     Every operation (ingests, analyses, retrievals) is recorded with a
     hash of its inputs. This enables:
     - Idempotency: Same inputs = skip re-execution
     - Audit trail: Full history of all operations
     - Retry logic: Failed operations can be retried
     - Performance: Track operation duration and resource usage
-    
+
     The unique constraint on (op_type, input_hash) enforces idempotency
     at the database level.
     """
+
     __tablename__ = "operations"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -435,7 +477,9 @@ class Operation(Base):
 
     # Operation identification
     op_type = Column(Enum(OperationTypeEnum), nullable=False, index=True)
-    input_hash = Column(String(64), nullable=False, index=True, comment="SHA-256 of normalized inputs")
+    input_hash = Column(
+        String(64), nullable=False, index=True, comment="SHA-256 of normalized inputs"
+    )
 
     # Input/Output
     inputs = Column(JSONB, nullable=False, comment="Full input parameters")
@@ -443,10 +487,7 @@ class Operation(Base):
 
     # Status tracking
     status = Column(
-        Enum(OperationStatusEnum),
-        nullable=False,
-        default=OperationStatusEnum.PENDING,
-        index=True
+        Enum(OperationStatusEnum), nullable=False, default=OperationStatusEnum.PENDING, index=True
     )
     error_message = Column(Text, nullable=True)
     error_traceback = Column(Text, nullable=True)
@@ -459,12 +500,20 @@ class Operation(Base):
     duration_ms = Column(Integer, nullable=True)
 
     # Resource references (optional, for context)
-    repository_id = Column(UUID(as_uuid=True), ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True)
-    resource_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="SET NULL"), nullable=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
+    repository_id = Column(
+        UUID(as_uuid=True), ForeignKey("repositories.id", ondelete="SET NULL"), nullable=True
+    )
+    resource_id = Column(
+        UUID(as_uuid=True), ForeignKey("resources.id", ondelete="SET NULL"), nullable=True
+    )
+    document_id = Column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Correlation for tracing
-    correlation_id = Column(String(64), nullable=True, index=True, comment="For tracing related operations")
+    correlation_id = Column(
+        String(64), nullable=True, index=True, comment="For tracing related operations"
+    )
     parent_operation_id = Column(UUID(as_uuid=True), ForeignKey("operations.id"), nullable=True)
 
     # Agent context
@@ -536,28 +585,39 @@ class Operation(Base):
 # DOCUMENT & CHUNKS - Core content storage
 # =============================================================================
 
+
 class Document(Base):
     """
     Primary document/knowledge entry storage.
-    
+
     Stores document metadata and full content. For large documents,
     content is chunked into DocChunk records for embedding search.
     """
+
     __tablename__ = "documents"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
 
     # Source reference
-    source_resource_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="SET NULL"), nullable=True, index=True)
+    source_resource_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("resources.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
 
     # Document identification
     title = Column(String(500), nullable=False, index=True)
     content = Column(Text, nullable=False)
-    content_hash = Column(String(64), nullable=False, index=True, comment="SHA-256 for deduplication")
+    content_hash = Column(
+        String(64), nullable=False, index=True, comment="SHA-256 for deduplication"
+    )
 
     # Classification
-    doc_type = Column(Enum(KnowledgeTypeEnum), nullable=False, default=KnowledgeTypeEnum.DOCUMENTATION)
+    doc_type = Column(
+        Enum(KnowledgeTypeEnum), nullable=False, default=KnowledgeTypeEnum.DOCUMENTATION
+    )
     source = Column(String(255), nullable=False, index=True, comment="Origin (agent, user, system)")
     category = Column(String(100), nullable=True, index=True)
 
@@ -596,10 +656,16 @@ class Document(Base):
     source_resource = relationship("Resource", back_populates="documents")
     parent = relationship("Document", remote_side=[id], backref="versions")
     chunks = relationship("DocChunk", back_populates="document", cascade="all, delete-orphan")
-    summaries = relationship("DocumentSummary", back_populates="document", cascade="all, delete-orphan")
-    entities = relationship("DocumentEntity", back_populates="document", cascade="all, delete-orphan")
+    summaries = relationship(
+        "DocumentSummary", back_populates="document", cascade="all, delete-orphan"
+    )
+    entities = relationship(
+        "DocumentEntity", back_populates="document", cascade="all, delete-orphan"
+    )
     topics = relationship("DocumentTopic", back_populates="document", cascade="all, delete-orphan")
-    concepts = relationship("DocumentConcept", back_populates="document", cascade="all, delete-orphan")
+    concepts = relationship(
+        "DocumentConcept", back_populates="document", cascade="all, delete-orphan"
+    )
     operations = relationship("Operation", back_populates="document")
 
     __table_args__ = (
@@ -619,15 +685,21 @@ class Document(Base):
 class DocChunk(Base):
     """
     Document chunks for embedding-based retrieval.
-    
+
     Each chunk is ~800-1000 tokens with overlap for context preservation.
     Embeddings stored via pgvector for similarity search.
     """
+
     __tablename__ = "doc_chunks"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Content
     content = Column(Text, nullable=False)
@@ -670,26 +742,35 @@ class DocChunk(Base):
     )
 
     def __repr__(self):
-        return f"<DocChunk(doc={self.document_id}, idx={self.chunk_index}, tokens={self.token_count})>"
+        return (
+            f"<DocChunk(doc={self.document_id}, idx={self.chunk_index}, tokens={self.token_count})>"
+        )
 
 
 # =============================================================================
 # ARTIFACT - Generated outputs
 # =============================================================================
 
+
 class Artifact(Base):
     """
     Generated outputs from operations.
-    
+
     Artifacts are the products of operations - embeddings, summaries,
     analysis reports, etc. They reference their source operation for
     provenance tracking.
     """
+
     __tablename__ = "artifacts"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    operation_id = Column(UUID(as_uuid=True), ForeignKey("operations.id", ondelete="CASCADE"), nullable=False, index=True)
+    operation_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Artifact identification
     artifact_type = Column(Enum(ArtifactTypeEnum), nullable=False, index=True)
@@ -698,13 +779,19 @@ class Artifact(Base):
 
     # Content (either inline or reference)
     content = Column(JSONB, nullable=True, comment="Artifact content if small enough")
-    file_path = Column(String(1000), nullable=True, comment="Path to artifact file if stored externally")
+    file_path = Column(
+        String(1000), nullable=True, comment="Path to artifact file if stored externally"
+    )
     file_size_bytes = Column(Integer, nullable=True)
     content_hash = Column(String(64), nullable=True)
 
     # Source references
-    source_document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True)
-    source_resource_id = Column(UUID(as_uuid=True), ForeignKey("resources.id", ondelete="SET NULL"), nullable=True)
+    source_document_id = Column(
+        UUID(as_uuid=True), ForeignKey("documents.id", ondelete="SET NULL"), nullable=True
+    )
+    source_resource_id = Column(
+        UUID(as_uuid=True), ForeignKey("resources.id", ondelete="SET NULL"), nullable=True
+    )
 
     # Quality metrics
     quality_score = Column(Float, nullable=True, comment="Quality assessment 0-1")
@@ -741,21 +828,28 @@ class Artifact(Base):
 # DECISION - Agent decision logging
 # =============================================================================
 
+
 class Decision(Base):
     """
     Agent decision logging for observability and learning.
-    
+
     Records every significant decision an agent makes, including
     the context, reasoning, and outcome. This enables:
     - Debugging agent behavior
     - Training data collection
     - Performance analysis
     """
+
     __tablename__ = "decisions"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    operation_id = Column(UUID(as_uuid=True), ForeignKey("operations.id", ondelete="CASCADE"), nullable=True, index=True)
+    operation_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("operations.id", ondelete="CASCADE"),
+        nullable=True,
+        index=True,
+    )
 
     # Decision identification
     agent_id = Column(String(100), nullable=False, index=True)
@@ -773,7 +867,9 @@ class Decision(Base):
     # Outcome (filled in later)
     outcome = Column(JSONB, nullable=True, comment="Result of the decision")
     outcome_score = Column(Float, nullable=True, comment="Quality of outcome 0-1")
-    was_correct = Column(Boolean, nullable=True, comment="Whether decision was correct in hindsight")
+    was_correct = Column(
+        Boolean, nullable=True, comment="Whether decision was correct in hindsight"
+    )
     feedback = Column(Text, nullable=True)
 
     # Timing
@@ -804,13 +900,20 @@ class Decision(Base):
 # ANALYSIS TABLES - Knowledge atoms from distillation
 # =============================================================================
 
+
 class DocumentSummary(Base):
     """Generated summaries for documents."""
+
     __tablename__ = "document_summaries"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Summary content
     one_sentence = Column(Text, nullable=True)
@@ -836,11 +939,17 @@ class DocumentSummary(Base):
 
 class DocumentEntity(Base):
     """Named entities extracted from documents."""
+
     __tablename__ = "document_entities"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Entity details
     text = Column(String(500), nullable=False, index=True)
@@ -870,11 +979,17 @@ class DocumentEntity(Base):
 
 class DocumentTopic(Base):
     """Topics identified in documents."""
+
     __tablename__ = "document_topics"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Topic details
     topic_id = Column(Integer, nullable=False, comment="Topic cluster ID from BERTopic")
@@ -900,11 +1015,17 @@ class DocumentTopic(Base):
 
 class DocumentConcept(Base):
     """Key concepts extracted from documents."""
+
     __tablename__ = "document_concepts"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
-    document_id = Column(UUID(as_uuid=True), ForeignKey("documents.id", ondelete="CASCADE"), nullable=False, index=True)
+    document_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("documents.id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Concept details
     concept = Column(String(255), nullable=False, index=True)
@@ -928,8 +1049,10 @@ class DocumentConcept(Base):
 # AGENT RUNS - Activity tracing
 # =============================================================================
 
+
 class AgentRun(Base):
     """Log of agent task executions and outcomes."""
+
     __tablename__ = "agent_runs"
 
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -984,8 +1107,10 @@ class AgentRun(Base):
 # KNOWLEDGE NETWORK - Cross-agent intelligence
 # =============================================================================
 
+
 class KnowledgeNode(Base):
     """Cross-agent knowledge nodes for shared intelligence."""
+
     __tablename__ = "knowledge_nodes"
 
     node_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
@@ -1034,13 +1159,13 @@ class KnowledgeNode(Base):
         "KnowledgeEdge",
         foreign_keys="KnowledgeEdge.from_node_id",
         back_populates="from_node",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
     incoming_edges = relationship(
         "KnowledgeEdge",
         foreign_keys="KnowledgeEdge.to_node_id",
         back_populates="to_node",
-        cascade="all, delete-orphan"
+        cascade="all, delete-orphan",
     )
 
     __table_args__ = (
@@ -1053,13 +1178,24 @@ class KnowledgeNode(Base):
 
 class KnowledgeEdge(Base):
     """Relationships between knowledge nodes."""
+
     __tablename__ = "knowledge_edges"
 
     edge_id = Column(UUID(as_uuid=True), primary_key=True, default=uuid4)
     tenant_id = Column(UUID(as_uuid=True), ForeignKey("tenants.id"), nullable=False, index=True)
 
-    from_node_id = Column(UUID(as_uuid=True), ForeignKey("knowledge_nodes.node_id", ondelete="CASCADE"), nullable=False, index=True)
-    to_node_id = Column(UUID(as_uuid=True), ForeignKey("knowledge_nodes.node_id", ondelete="CASCADE"), nullable=False, index=True)
+    from_node_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_nodes.node_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
+    to_node_id = Column(
+        UUID(as_uuid=True),
+        ForeignKey("knowledge_nodes.node_id", ondelete="CASCADE"),
+        nullable=False,
+        index=True,
+    )
 
     # Relationship details
     edge_type = Column("relationship", String(50), nullable=False, index=True)
@@ -1071,8 +1207,12 @@ class KnowledgeEdge(Base):
 
     # Relationships
     tenant = relationship("Tenant", backref="knowledge_edges")
-    from_node = relationship("KnowledgeNode", foreign_keys=[from_node_id], back_populates="outgoing_edges")
-    to_node = relationship("KnowledgeNode", foreign_keys=[to_node_id], back_populates="incoming_edges")
+    from_node = relationship(
+        "KnowledgeNode", foreign_keys=[from_node_id], back_populates="outgoing_edges"
+    )
+    to_node = relationship(
+        "KnowledgeNode", foreign_keys=[to_node_id], back_populates="incoming_edges"
+    )
 
     __table_args__ = (
         UniqueConstraint("from_node_id", "to_node_id", "relationship", name="uq_knowledge_edge"),
@@ -1084,8 +1224,10 @@ class KnowledgeEdge(Base):
 # SCHEMA VERSION TRACKING
 # =============================================================================
 
+
 class SchemaVersion(Base):
     """Track schema migrations."""
+
     __tablename__ = "_schema_version"
 
     version = Column(Integer, primary_key=True)
@@ -1101,10 +1243,11 @@ SCHEMA_VERSION = 2
 # TABLE CREATION HELPERS
 # =============================================================================
 
+
 def create_all_tables(engine):
     """
     Create all tables in the database.
-    
+
     Note: Run the following SQL first:
         CREATE EXTENSION IF NOT EXISTS vector;
         CREATE EXTENSION IF NOT EXISTS pg_trgm;
@@ -1124,14 +1267,14 @@ def get_pgvector_index_sql() -> str:
     
     -- Create IVFFlat index on doc_chunks for approximate nearest neighbor
     -- Adjust 'lists' parameter based on data size (sqrt(n) is a good starting point)
-    CREATE INDEX IF NOT EXISTS idx_chunk_embedding_ivfflat 
-    ON doc_chunks 
+    CREATE INDEX IF NOT EXISTS idx_chunk_embedding_ivfflat
+    ON doc_chunks
     USING ivfflat (embedding vector_cosine_ops)
     WITH (lists = 100);
     
     -- Create index on knowledge_nodes embeddings
-    CREATE INDEX IF NOT EXISTS idx_knode_embedding_ivfflat 
-    ON knowledge_nodes 
+    CREATE INDEX IF NOT EXISTS idx_knode_embedding_ivfflat
+    ON knowledge_nodes
     USING ivfflat (embedding vector_cosine_ops)
     WITH (lists = 100);
     
@@ -1152,13 +1295,13 @@ def get_pgvector_index_sql() -> str:
     AS $$
     BEGIN
         RETURN QUERY
-        SELECT 
+        SELECT
             dc.id,
             dc.document_id,
             dc.content,
             1 - (dc.embedding <=> query_embedding) as similarity
         FROM doc_chunks dc
-        WHERE 
+        WHERE
             dc.embedding IS NOT NULL
             AND (filter_tenant_id IS NULL OR dc.tenant_id = filter_tenant_id)
             AND (filter_document_id IS NULL OR dc.document_id = filter_document_id)

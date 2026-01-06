@@ -14,6 +14,10 @@ from sqlalchemy import create_engine, event, Text, String
 from sqlalchemy.orm import sessionmaker
 from sqlalchemy import TypeDecorator
 
+from httpx import AsyncClient
+from typing import AsyncGenerator
+from server import app
+
 
 # =============================================================================
 # ASYNC TEST SUPPORT
@@ -25,6 +29,14 @@ def event_loop():
     loop = asyncio.get_event_loop_policy().new_event_loop()
     yield loop
     loop.close()
+
+@pytest.fixture
+async def async_client() -> AsyncGenerator[AsyncClient, None]:
+    """
+    Fixture for creating an async client for FastAPI testing.
+    """
+    async with AsyncClient(app=app, base_url="http://test") as ac:
+        yield ac
 
 
 # =============================================================================

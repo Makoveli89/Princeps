@@ -5,15 +5,13 @@ Demonstrates how to create a specialized agent by extending BaseAgent.
 This example implements a simple summarization agent.
 """
 
-from typing import Any, Dict, List
+from typing import Any
 
 from framework.agents.base_agent import (
-    BaseAgent,
-    AgentConfig,
-    AgentTask,
     AgentResponse,
+    AgentTask,
+    BaseAgent,
     TaskStatus,
-    LLMProvider,
 )
 
 
@@ -28,7 +26,7 @@ class SummarizationAgent(BaseAgent):
     - Fallback handling
     """
 
-    def _initialize_capabilities(self) -> List[str]:
+    def _initialize_capabilities(self) -> list[str]:
         """Define summarization-specific capabilities"""
         return [
             "text-summarization",
@@ -46,15 +44,12 @@ class SummarizationAgent(BaseAgent):
             "concise": """You are an expert summarization assistant. Your task is to create
 clear, concise summaries that capture the essential information from the provided text.
 Focus on the main ideas and key points. Keep the summary brief but comprehensive.""",
-
             "detailed": """You are an expert summarization assistant. Create detailed summaries
 that preserve important nuances and supporting details from the source text.
 Include relevant examples and explanations where appropriate.""",
-
             "bullet": """You are an expert summarization assistant. Create summaries in
 bullet-point format, listing the key points and important information.
 Use clear, actionable language. Group related points together.""",
-
             "executive": """You are an expert executive summary writer. Create summaries suitable
 for busy executives who need to quickly understand the key points and implications.
 Focus on conclusions, recommendations, and actionable insights.""",
@@ -62,11 +57,7 @@ Focus on conclusions, recommendations, and actionable insights.""",
 
         return prompts.get(summary_type, prompts["concise"])
 
-    def _process_response(
-        self,
-        raw_response: str,
-        task: AgentTask
-    ) -> Dict[str, Any]:
+    def _process_response(self, raw_response: str, task: AgentTask) -> dict[str, Any]:
         """Process and validate the summarization response"""
         # Basic validation
         if not raw_response or len(raw_response.strip()) < 10:
@@ -110,10 +101,8 @@ Focus on conclusions, recommendations, and actionable insights.""",
 
         if fallback_summary:
             fallback_summary += "..."
-            message = "Used extractive fallback due to LLM unavailability"
         else:
             fallback_summary = "Unable to generate summary."
-            message = f"All summarization attempts failed: {error}"
 
         return AgentResponse(
             task_id=task.task_id,
@@ -132,7 +121,7 @@ class CodeReviewAgent(BaseAgent):
     Demonstrates specialized agent for code analysis.
     """
 
-    def _initialize_capabilities(self) -> List[str]:
+    def _initialize_capabilities(self) -> list[str]:
         """Define code review capabilities"""
         return [
             "code-review",
@@ -153,22 +142,17 @@ Analyze the provided code and provide constructive feedback."""
 
         focus_additions = {
             "security": "\nFocus especially on security vulnerabilities, input validation, "
-                       "and potential injection attacks.",
+            "and potential injection attacks.",
             "performance": "\nFocus on performance optimizations, algorithmic efficiency, "
-                          "and resource management.",
+            "and resource management.",
             "style": "\nFocus on code style, readability, naming conventions, "
-                    "and adherence to best practices.",
-            "bugs": "\nFocus on identifying potential bugs, edge cases, "
-                   "and logical errors.",
+            "and adherence to best practices.",
+            "bugs": "\nFocus on identifying potential bugs, edge cases, and logical errors.",
         }
 
         return base_prompt + focus_additions.get(focus, "")
 
-    def _process_response(
-        self,
-        raw_response: str,
-        task: AgentTask
-    ) -> Dict[str, Any]:
+    def _process_response(self, raw_response: str, task: AgentTask) -> dict[str, Any]:
         """Process code review response"""
         # Try to extract structured feedback
         structured = {
@@ -222,7 +206,7 @@ if __name__ == "__main__":
             agent_type="summarization",
         )
 
-        print(f"\nSummarization Agent Capabilities:")
+        print("\nSummarization Agent Capabilities:")
         caps = summarizer.get_capabilities()
         print(f"  - Initialized: {caps['initialized']}")
         print(f"  - Capabilities: {caps['capabilities']}")
@@ -233,7 +217,7 @@ if __name__ == "__main__":
             agent_type="code_review",
         )
 
-        print(f"\nCode Review Agent Capabilities:")
+        print("\nCode Review Agent Capabilities:")
         caps = reviewer.get_capabilities()
         print(f"  - Initialized: {caps['initialized']}")
         print(f"  - Capabilities: {caps['capabilities']}")

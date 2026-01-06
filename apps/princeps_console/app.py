@@ -1,6 +1,7 @@
 import streamlit as st
-from lib.workspace import get_active_workspace, get_active_workspace_details, switch_workspace
 from lib.db import get_db_session
+from lib.workspace import get_active_workspace, get_active_workspace_details, switch_workspace
+
 from brain.core.models import Tenant
 
 st.set_page_config(
@@ -11,7 +12,8 @@ st.set_page_config(
 )
 
 # Custom CSS for "Gothic Futuristic" look (Dark mode is default in Streamlit config usually, adding some overrides)
-st.markdown("""
+st.markdown(
+    """
 <style>
     /* Add some subtle styling */
     .stApp {
@@ -25,7 +27,9 @@ st.markdown("""
         margin-bottom: 10px;
     }
 </style>
-""", unsafe_allow_html=True)
+""",
+    unsafe_allow_html=True,
+)
 
 # --- Sidebar ---
 st.sidebar.title("Princeps Console")
@@ -46,7 +50,7 @@ if active_ws_id:
         "Workspace",
         options=list(ws_options.keys()),
         format_func=lambda x: ws_options.get(x, "Unknown"),
-        index=list(ws_options.keys()).index(active_ws_id) if active_ws_id in ws_options else 0
+        index=list(ws_options.keys()).index(active_ws_id) if active_ws_id in ws_options else 0,
     )
 
     if selected_ws != active_ws_id:

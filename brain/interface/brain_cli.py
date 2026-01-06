@@ -1,4 +1,5 @@
 """Brain CLI - Command-line interface."""
+
 import argparse
 import sys
 
@@ -56,6 +57,7 @@ class BrainCLI:
     def cmd_init(self, args):
         print("Initializing database...")
         from ..core.db import init_db
+
         init_db()
         print("Database initialized successfully!")
         return 0
@@ -63,6 +65,7 @@ class BrainCLI:
     def cmd_ingest(self, args):
         print(f"Ingesting {args.type}: {args.path}")
         from ..ingestion import IngestService
+
         service = IngestService()
         if args.type == "document":
             result = service.ingest_document(args.path, tenant_name=args.tenant)
@@ -75,6 +78,7 @@ class BrainCLI:
     def cmd_distill(self, args):
         print("Distilling documents...")
         from ..distillation import DistillationService
+
         service = DistillationService()
         if args.batch:
             results = service.distill_unanalyzed_documents()
@@ -94,10 +98,12 @@ class BrainCLI:
         # Stub
         return 0
 
+
 def cli_main():
     """Main entry point for CLI."""
     cli = BrainCLI()
     sys.exit(cli.run())
+
 
 if __name__ == "__main__":
     cli_main()

@@ -1,7 +1,8 @@
-import streamlit as st
 import pandas as pd
-from lib.workspace import get_active_workspace
+import streamlit as st
 from lib.db import safe_query
+from lib.workspace import get_active_workspace
+
 from brain.core.models import AgentRun
 
 st.set_page_config(page_title="Runs & Logs", page_icon="📜", layout="wide")
@@ -23,6 +24,7 @@ with st.expander("Filters", expanded=True):
     with c3:
         limit = st.number_input("Limit", min_value=10, max_value=500, value=50)
 
+
 # --- Query ---
 def get_runs(session):
     query = session.query(AgentRun).filter(AgentRun.tenant_id == ws_id)
@@ -30,12 +32,13 @@ def get_runs(session):
     if agent_filter:
         query = query.filter(AgentRun.agent_id.ilike(f"%{agent_filter}%"))
     if status_filter == "Success":
-        query = query.filter(AgentRun.success == True)
+        query = query.filter(AgentRun.success)
     elif status_filter == "Failed":
-        query = query.filter(AgentRun.success == False)
+        query = query.filter(not AgentRun.success)
 
     query = query.order_by(AgentRun.started_at.desc()).limit(limit)
     return query.all()
+
 
 runs = safe_query(get_runs)
 
@@ -46,14 +49,16 @@ else:
     # Main Table
     data = []
     for r in runs:
-        data.append({
-            "ID": str(r.id),
-            "Time": r.started_at,
-            "Agent": r.agent_id,
-            "Success": "✅" if r.success else "❌",
-            "Duration (ms)": r.duration_ms,
-            "Task Preview": (r.task[:80] + "...") if r.task else ""
-        })
+        data.append(
+            {
+                "ID": str(r.id),
+                "Time": r.started_at,
+                "Agent": r.agent_id,
+                "Success": "✅" if r.success else "❌",
+                "Duration (ms)": r.duration_ms,
+                "Task Preview": (r.task[:80] + "...") if r.task else "",
+            }
+        )
 
     df = pd.DataFrame(data)
     st.dataframe(df, use_container_width=True, hide_index=True)
@@ -62,9 +67,12 @@ else:
 
     # --- Detail View ---
     st.subheader("Run Details")
-    selected_run_id = st.selectbox("Select Run to Inspect", options=[r.id for r in runs], format_func=lambda x: str(x))
+    selected_run_id = st.selectbox(
+        "Select Run to Inspect", options=[r.id for r in runs], format_func=lambda x: str(x)
+    )
 
     if selected_run_id:
+
         def get_run_detail(session):
             return session.query(AgentRun).filter(AgentRun.id == selected_run_id).first()
 

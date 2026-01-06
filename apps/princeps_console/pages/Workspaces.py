@@ -1,7 +1,8 @@
 import streamlit as st
-from lib.workspace import get_active_workspace, create_workspace, rename_workspace
 from lib.db import safe_query
-from brain.core.models import Tenant, Document, AgentRun, DocChunk
+from lib.workspace import create_workspace, rename_workspace
+
+from brain.core.models import AgentRun, DocChunk, Document, Tenant
 
 st.set_page_config(page_title="Workspaces", page_icon="🏢", layout="wide")
 
@@ -28,6 +29,7 @@ with st.expander("Create New Workspace", expanded=False):
 # --- List Workspaces ---
 st.subheader("Existing Workspaces")
 
+
 def get_workspaces_with_stats(session):
     tenants = session.query(Tenant).all()
     stats = []
@@ -35,15 +37,18 @@ def get_workspaces_with_stats(session):
         doc_count = session.query(Document).filter(Document.tenant_id == t.id).count()
         run_count = session.query(AgentRun).filter(AgentRun.tenant_id == t.id).count()
         chunk_count = session.query(DocChunk).filter(DocChunk.tenant_id == t.id).count()
-        stats.append({
-            "id": str(t.id),
-            "name": t.name,
-            "docs": doc_count,
-            "chunks": chunk_count,
-            "runs": run_count,
-            "obj": t
-        })
+        stats.append(
+            {
+                "id": str(t.id),
+                "name": t.name,
+                "docs": doc_count,
+                "chunks": chunk_count,
+                "runs": run_count,
+                "obj": t,
+            }
+        )
     return stats
+
 
 ws_stats = safe_query(get_workspaces_with_stats)
 
@@ -57,18 +62,18 @@ for ws in ws_stats:
 
     # Stats
     with c2:
-        st.metric("Docs", ws['docs'])
+        st.metric("Docs", ws["docs"])
     with c3:
-        st.metric("Chunks", ws['chunks'])
+        st.metric("Chunks", ws["chunks"])
     with c4:
-        st.metric("Runs", ws['runs'])
+        st.metric("Runs", ws["runs"])
 
     # Actions
     with c5:
         with st.popover("Rename"):
-            new_rename_val = st.text_input("New Name", value=ws['name'], key=f"rename_{ws['id']}")
+            new_rename_val = st.text_input("New Name", value=ws["name"], key=f"rename_{ws['id']}")
             if st.button("Save", key=f"save_{ws['id']}"):
-                success, err = rename_workspace(ws['id'], new_rename_val)
+                success, err = rename_workspace(ws["id"], new_rename_val)
                 if success:
                     st.success("Renamed!")
                     st.rerun()

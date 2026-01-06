@@ -1,8 +1,10 @@
-import streamlit as st
 import os
 import tempfile
+
+import streamlit as st
 from lib.workspace import get_active_workspace, get_active_workspace_details
-from brain.ingestion.ingest_service import IngestService, IngestConfig
+
+from brain.ingestion.ingest_service import IngestService
 
 st.set_page_config(page_title="Ingest Data", page_icon="📥", layout="wide")
 
@@ -21,7 +23,9 @@ tab1, tab2 = st.tabs(["Upload Document", "Ingest Repository"])
 # --- Tab 1: Document Upload ---
 with tab1:
     st.header("Upload Document")
-    uploaded_file = st.file_uploader("Choose a file", type=['pdf', 'txt', 'md', 'json', 'py', 'js', 'html'])
+    uploaded_file = st.file_uploader(
+        "Choose a file", type=["pdf", "txt", "md", "json", "py", "js", "html"]
+    )
 
     doc_tags = st.text_input("Tags (comma separated)", placeholder="e.g. finance, Q1, draft")
 
@@ -29,13 +33,15 @@ with tab1:
         if uploaded_file is not None:
             with st.spinner("Ingesting..."):
                 # Save temp file
-                with tempfile.NamedTemporaryFile(delete=False, suffix=f"_{uploaded_file.name}") as tmp:
+                with tempfile.NamedTemporaryFile(
+                    delete=False, suffix=f"_{uploaded_file.name}"
+                ) as tmp:
                     tmp.write(uploaded_file.getbuffer())
                     tmp_path = tmp.name
 
                 try:
                     # Initialize service
-                    service = IngestService() # Uses default config
+                    service = IngestService()  # Uses default config
 
                     # Process tags
                     meta = {}
@@ -46,7 +52,9 @@ with tab1:
                     # but IngestService takes tenant_name. We should probably update IngestService or lookup name)
                     # The IngestService uses tenant_name to lookup ID.
 
-                    result = service.ingest_document(tmp_path, tenant_name=ws_details.name, metadata=meta)
+                    result = service.ingest_document(
+                        tmp_path, tenant_name=ws_details.name, metadata=meta
+                    )
 
                     if result.success:
                         st.success("Ingestion Successful!")
@@ -93,11 +101,14 @@ with tab2:
                         st.info("Cloning repository...")
                         temp_dir = tempfile.mkdtemp()
                         import subprocess
+
                         subprocess.run(["git", "clone", repo_url, temp_dir], check=True)
                         target_path = temp_dir
 
                     if target_path:
-                        result = service.ingest_repository(target_path, url=repo_url, tenant_name=ws_details.name)
+                        result = service.ingest_repository(
+                            target_path, url=repo_url, tenant_name=ws_details.name
+                        )
 
                         if result.success:
                             st.success("Repository Ingestion Successful!")

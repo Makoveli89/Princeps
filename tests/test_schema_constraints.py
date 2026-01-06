@@ -1,14 +1,23 @@
 """Tests for Alembic migration schema constraints."""
-import pytest
-from uuid import uuid4
-from sqlalchemy.exc import IntegrityError
 
+from uuid import uuid4
+
+from brain.core.db import compute_content_hash, compute_input_hash, get_or_create_operation
 from brain.core.models import (
-    Tenant, Document, DocChunk, Operation, Repository, Resource,
-    DocumentSummary, DocumentEntity, Artifact, KnowledgeNode, KnowledgeEdge,
-    OperationTypeEnum, OperationStatusEnum, ResourceTypeEnum, NodeKnowledgeTypeEnum,
+    DocChunk,
+    Document,
+    DocumentSummary,
+    KnowledgeEdge,
+    KnowledgeNode,
+    NodeKnowledgeTypeEnum,
+    Operation,
+    OperationStatusEnum,
+    OperationTypeEnum,
+    Repository,
+    Resource,
+    ResourceTypeEnum,
+    Tenant,
 )
-from brain.core.db import get_or_create_operation, compute_input_hash, compute_content_hash
 
 
 class TestForeignKeyConstraints:
@@ -63,7 +72,7 @@ class TestUniqueConstraints:
     def test_operation_type_input_hash_unique(self, session, tenant):
         """Operation (op_type, input_hash) should be unique."""
         inputs = {"path": "/unique/test.pdf"}
-        input_hash = compute_input_hash(OperationTypeEnum.INGEST_DOCUMENT.value, inputs)
+        compute_input_hash(OperationTypeEnum.INGEST_DOCUMENT.value, inputs)
 
         # First operation
         op1, created1 = get_or_create_operation(
@@ -153,9 +162,6 @@ class TestCascadeDeletes:
         session.add(chunk)
         session.commit()
 
-        chunk_id = chunk.id
-        doc_id = sample_document.id
-
         # Delete document
         session.delete(sample_document)
         session.commit()
@@ -183,8 +189,6 @@ class TestCascadeDeletes:
         )
         session.add(resource)
         session.commit()
-
-        resource_id = resource.id
 
         # Delete repository
         session.delete(repo)
@@ -273,9 +277,7 @@ class TestIndexConstraints:
         session.commit()
 
         # Query should use tenant_id index
-        docs = session.query(Document).filter(
-            Document.tenant_id == tenant.id
-        ).all()
+        docs = session.query(Document).filter(Document.tenant_id == tenant.id).all()
 
         assert len(docs) == 10
 
@@ -288,9 +290,9 @@ class TestIndexConstraints:
         session.commit()
 
         # Query by input_hash should use index
-        found = session.query(Operation).filter(
-            Operation.input_hash == operation.input_hash
-        ).first()
+        found = (
+            session.query(Operation).filter(Operation.input_hash == operation.input_hash).first()
+        )
 
         assert found is not None
         assert found.id == operation.id
@@ -324,9 +326,9 @@ class TestModelAssumptionsAlignment:
         session.commit()
 
         # Verify all expected fields exist
-        assert hasattr(operation, 'created_at')
-        assert hasattr(operation, 'started_at')
-        assert hasattr(operation, 'completed_at')
-        assert hasattr(operation, 'status')
-        assert hasattr(operation, 'error_message')
-        assert hasattr(operation, 'retry_count')
+        assert hasattr(operation, "created_at")
+        assert hasattr(operation, "started_at")
+        assert hasattr(operation, "completed_at")
+        assert hasattr(operation, "status")
+        assert hasattr(operation, "error_message")
+        assert hasattr(operation, "retry_count")

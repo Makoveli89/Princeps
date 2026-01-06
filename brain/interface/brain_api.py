@@ -2,7 +2,6 @@
 
 import logging
 from typing import Any
-from uuid import UUID
 
 logger = logging.getLogger(__name__)
 
@@ -10,16 +9,16 @@ logger = logging.getLogger(__name__)
 def create_app():
     """Create FastAPI application."""
     try:
-        from fastapi import FastAPI, HTTPException, Query, Body, BackgroundTasks
+        from fastapi import BackgroundTasks, Body, FastAPI, HTTPException, Query
         from fastapi.middleware.cors import CORSMiddleware
         from pydantic import BaseModel, Field
     except ImportError:
         raise ImportError("FastAPI not installed. Run: pip install fastapi uvicorn")
 
-    from ..core.db import get_session, get_default_tenant_id, compute_content_hash
-    from ..core.models import Document, DocChunk, Operation, Tenant, OperationStatusEnum
-    from ..ingestion import IngestService, IngestConfig
+    from ..core.db import get_session
+    from ..core.models import DocChunk, Document, Operation, OperationStatusEnum, Tenant
     from ..distillation import DistillationService
+    from ..ingestion import IngestService
 
     app = FastAPI(
         title="Princeps Brain Layer API",
@@ -89,13 +88,13 @@ def create_app():
         """List all tenants."""
         try:
             with get_session() as session:
-                tenants = session.query(Tenant).filter(Tenant.is_active == True).all()
+                tenants = session.query(Tenant).filter(Tenant.is_active).all()
                 return {
                     "tenants": [
                         {"id": str(t.id), "name": t.name, "description": t.description}
                         for t in tenants
                     ],
-                    "total": len(tenants)
+                    "total": len(tenants),
                 }
         except Exception as e:
             logger.error(f"Error listing tenants: {e}")
@@ -105,36 +104,40 @@ def create_app():
     def list_documents(
         limit: int = Query(default=20, le=100),
         offset: int = Query(default=0, ge=0),
-        tenant_id: str | None = None
+        tenant_id: str | None = None,
     ):
         """List documents with pagination."""
         try:
             with get_session() as session:
                 query = session.query(Document)
-                
+
                 if tenant_id:
                     query = query.filter(Document.tenant_id == tenant_id)
-                
+
                 total = query.count()
-                documents = query.order_by(Document.created_at.desc()).offset(offset).limit(limit).all()
-                
+                documents = (
+                    query.order_by(Document.created_at.desc()).offset(offset).limit(limit).all()
+                )
+
                 return {
                     "documents": [
                         DocumentResponse(
                             id=str(d.id),
                             title=d.title,
                             source=d.source,
-                            content_preview=d.content[:200] + "..." if len(d.content) > 200 else d.content,
+                            content_preview=d.content[:200] + "..."
+                            if len(d.content) > 200
+                            else d.content,
                             word_count=d.word_count,
                             is_chunked=d.is_chunked,
                             is_embedded=d.is_embedded,
-                            created_at=d.created_at.isoformat() if d.created_at else None
+                            created_at=d.created_at.isoformat() if d.created_at else None,
                         ).model_dump()
                         for d in documents
                     ],
                     "total": total,
                     "limit": limit,
-                    "offset": offset
+                    "offset": offset,
                 }
         except Exception as e:
             logger.error(f"Error listing documents: {e}")
@@ -148,9 +151,9 @@ def create_app():
                 doc = session.query(Document).filter(Document.id == document_id).first()
                 if not doc:
                     raise HTTPException(status_code=404, detail="Document not found")
-                
+
                 chunks = session.query(DocChunk).filter(DocChunk.document_id == document_id).all()
-                
+
                 return {
                     "id": str(doc.id),
                     "tenant_id": str(doc.tenant_id),
@@ -180,12 +183,13 @@ def create_app():
             service = IngestService()
             # IngestService uses tenant_name parameter
             result = service.ingest_document(request.path, tenant_name=request.tenant_id)
-            
+
             return IngestResponse(
                 status="completed" if result.success else "failed",
                 operation_id=result.operation_id or "unknown",
                 message=f"Created {result.documents_created} documents, {result.chunks_created} chunks"
-                        if result.success else f"Failed: {', '.join(result.errors)}"
+                if result.success
+                else f"Failed: {', '.join(result.errors)}",
             ).model_dump()
         except Exception as e:
             logger.error(f"Error ingesting document: {e}")
@@ -198,13 +202,14 @@ def create_app():
             service = IngestService()
             # IngestService uses tenant_name parameter
             result = service.ingest_repository(request.path, tenant_name=request.tenant_id)
-            
+
             return IngestResponse(
                 status="completed" if result.success else "failed",
                 operation_id=result.operation_id or "unknown",
                 message=f"Created {result.documents_created} documents, {result.chunks_created} chunks, "
-                        f"{result.resources_created} resources"
-                        if result.success else f"Failed: {', '.join(result.errors)}"
+                f"{result.resources_created} resources"
+                if result.success
+                else f"Failed: {', '.join(result.errors)}",
             ).model_dump()
         except Exception as e:
             logger.error(f"Error ingesting repository: {e}")
@@ -218,11 +223,11 @@ def create_app():
                 doc = session.query(Document).filter(Document.id == document_id).first()
                 if not doc:
                     raise HTTPException(status_code=404, detail="Document not found")
-            
+
             service = DistillationService()
             # DistillationService uses tenant_name parameter
             result = service.distill_document(document_id, tenant_name=tenant_id)
-            
+
             return {
                 "status": "completed" if result.success else "failed",
                 "operation_id": result.operation_id,
@@ -230,7 +235,7 @@ def create_app():
                 "entities_created": result.entities_created,
                 "topics_created": result.topics_created,
                 "concepts_created": result.concepts_created,
-                "errors": result.errors
+                "errors": result.errors,
             }
         except HTTPException:
             raise
@@ -242,22 +247,27 @@ def create_app():
     def query(request: QueryRequest):
         """Semantic search across documents."""
         try:
-            from ..core.db import similarity_search_chunks
-            
             # For now, return text-based search results
             # Full semantic search requires embedding the query
             with get_session() as session:
                 tid = request.tenant_id
                 if tid:
-                    chunks = session.query(DocChunk).filter(
-                        DocChunk.tenant_id == tid,
-                        DocChunk.content.ilike(f"%{request.text}%")
-                    ).limit(request.limit).all()
+                    chunks = (
+                        session.query(DocChunk)
+                        .filter(
+                            DocChunk.tenant_id == tid, DocChunk.content.ilike(f"%{request.text}%")
+                        )
+                        .limit(request.limit)
+                        .all()
+                    )
                 else:
-                    chunks = session.query(DocChunk).filter(
-                        DocChunk.content.ilike(f"%{request.text}%")
-                    ).limit(request.limit).all()
-                
+                    chunks = (
+                        session.query(DocChunk)
+                        .filter(DocChunk.content.ilike(f"%{request.text}%"))
+                        .limit(request.limit)
+                        .all()
+                    )
+
                 return {
                     "results": [
                         QueryResult(
@@ -265,12 +275,12 @@ def create_app():
                             document_id=str(c.document_id),
                             content=c.content,
                             score=1.0,  # Placeholder until vector search
-                            metadata=c.metadata or {}
+                            metadata=c.metadata or {},
                         ).model_dump()
                         for c in chunks
                     ],
                     "query": request.text,
-                    "total": len(chunks)
+                    "total": len(chunks),
                 }
         except Exception as e:
             logger.error(f"Error querying: {e}")
@@ -284,22 +294,28 @@ def create_app():
                 total_documents = session.query(Document).count()
                 total_chunks = session.query(DocChunk).count()
                 total_operations = session.query(Operation).count()
-                successful_ops = session.query(Operation).filter(
-                    Operation.status == OperationStatusEnum.SUCCESS
-                ).count()
-                failed_ops = session.query(Operation).filter(
-                    Operation.status == OperationStatusEnum.FAILED
-                ).count()
-                
+                successful_ops = (
+                    session.query(Operation)
+                    .filter(Operation.status == OperationStatusEnum.SUCCESS)
+                    .count()
+                )
+                failed_ops = (
+                    session.query(Operation)
+                    .filter(Operation.status == OperationStatusEnum.FAILED)
+                    .count()
+                )
+
                 return {
                     "total_documents": total_documents,
                     "total_chunks": total_chunks,
                     "total_operations": total_operations,
                     "successful_operations": successful_ops,
                     "failed_operations": failed_ops,
-                    "embedded_chunks": session.query(DocChunk).filter(
-                        DocChunk.embedding.isnot(None)
-                    ).count() if hasattr(DocChunk, 'embedding') else 0
+                    "embedded_chunks": session.query(DocChunk)
+                    .filter(DocChunk.embedding.isnot(None))
+                    .count()
+                    if hasattr(DocChunk, "embedding")
+                    else 0,
                 }
         except Exception as e:
             logger.error(f"Error getting metrics: {e}")
@@ -311,17 +327,19 @@ def create_app():
         """List workspaces (tenants) for console app."""
         try:
             with get_session() as session:
-                tenants = session.query(Tenant).filter(Tenant.is_active == True).all()
+                tenants = session.query(Tenant).filter(Tenant.is_active).all()
                 workspaces = []
                 for t in tenants:
                     doc_count = session.query(Document).filter(Document.tenant_id == t.id).count()
-                    workspaces.append(WorkspaceResponse(
-                        id=str(t.id),
-                        name=t.name,
-                        description=t.description,
-                        document_count=doc_count,
-                        is_active=t.is_active
-                    ).model_dump())
+                    workspaces.append(
+                        WorkspaceResponse(
+                            id=str(t.id),
+                            name=t.name,
+                            description=t.description,
+                            document_count=doc_count,
+                            is_active=t.is_active,
+                        ).model_dump()
+                    )
                 return {"workspaces": workspaces, "total": len(workspaces)}
         except Exception as e:
             logger.error(f"Error listing workspaces: {e}")
@@ -334,18 +352,20 @@ def create_app():
             with get_session() as session:
                 existing = session.query(Tenant).filter(Tenant.name == name).first()
                 if existing:
-                    raise HTTPException(status_code=400, detail="Workspace with this name already exists")
-                
+                    raise HTTPException(
+                        status_code=400, detail="Workspace with this name already exists"
+                    )
+
                 tenant = Tenant(name=name, description=description)
                 session.add(tenant)
                 session.commit()
-                
+
                 return WorkspaceResponse(
                     id=str(tenant.id),
                     name=tenant.name,
                     description=tenant.description,
                     document_count=0,
-                    is_active=True
+                    is_active=True,
                 ).model_dump()
         except HTTPException:
             raise
@@ -362,9 +382,7 @@ def create_app():
                 "status": "completed",
                 "response": f"Agent '{request.agent_type}' processed: {request.prompt[:100]}...",
                 "agent_type": request.agent_type,
-                "metadata": {
-                    "note": "Full agent integration pending framework connection"
-                }
+                "metadata": {"note": "Full agent integration pending framework connection"},
             }
         except Exception as e:
             logger.error(f"Error running agent: {e}")
@@ -381,6 +399,7 @@ class BrainAPI:
 
     def run(self, host: str = "0.0.0.0", port: int = 8000):
         import uvicorn
+
         uvicorn.run(self.app, host=host, port=port)
 
 

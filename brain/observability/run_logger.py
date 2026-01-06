@@ -7,7 +7,7 @@ correlation ID support, and result serialization.
 
 Usage:
     from brain.observability import AgentRunLogger, log_agent_run
-    
+
     with AgentRunLogger(session, tenant_id, "summarizer", "Summarize doc xyz") as run:
         result = do_work()
         run.set_success(solution=result, score=0.95)
@@ -35,12 +35,13 @@ from .logging_config import (
 )
 
 logger = get_logger(__name__)
-F = TypeVar('F', bound=Callable[..., Any])
+F = TypeVar("F", bound=Callable[..., Any])
 
 
 @dataclass
 class RunLoggerConfig:
     """Configuration for agent run logging."""
+
     default_max_retries: int = 3
     store_full_traceback: bool = True
     max_solution_size_kb: int = 100
@@ -57,6 +58,7 @@ DEFAULT_CONFIG = RunLoggerConfig()
 @dataclass
 class AgentRunResult:
     """Result of an agent run."""
+
     run_id: str
     success: bool
     agent_id: str
@@ -87,7 +89,11 @@ def truncate_solution(solution: Any, max_size_kb: int = 100) -> dict[str, Any]:
     max_bytes = max_size_kb * 1024
     if len(json_str) <= max_bytes:
         return solution
-    return {"_truncated": True, "_original_size_kb": len(json_str) // 1024, "preview": json_str[:1000] + "..."}
+    return {
+        "_truncated": True,
+        "_original_size_kb": len(json_str) // 1024,
+        "preview": json_str[:1000] + "...",
+    }
 
 
 def ensure_uuid(value: str | UUID | None) -> UUID | None:
@@ -100,17 +106,25 @@ def ensure_uuid(value: str | UUID | None) -> UUID | None:
 class AgentRunLogger:
     """
     Context manager for logging agent runs to the database.
-    
+
     Usage:
         with AgentRunLogger(session, tenant_id, "my_agent", "Process document", context={"doc_id": "123"}) as run:
             result = process_document()
             run.set_success(solution=result, score=0.9)
     """
 
-    def __init__(self, session: Session, tenant_id: str | UUID, agent_id: str, task: str,
-                 correlation_id: str | None = None, context: dict[str, Any] | None = None,
-                 tools_used: list[str] | None = None, model_version: str | None = None,
-                 config: RunLoggerConfig | None = None):
+    def __init__(
+        self,
+        session: Session,
+        tenant_id: str | UUID,
+        agent_id: str,
+        task: str,
+        correlation_id: str | None = None,
+        context: dict[str, Any] | None = None,
+        tools_used: list[str] | None = None,
+        model_version: str | None = None,
+        config: RunLoggerConfig | None = None,
+    ):
         self.session = session
         self.tenant_id = ensure_uuid(tenant_id)
         self.agent_id = agent_id
@@ -136,9 +150,15 @@ class AgentRunLogger:
         task_hash = compute_task_hash(self.task) if self.config.auto_generate_task_hash else None
 
         self.run = AgentRun(
-            tenant_id=self.tenant_id, agent_id=self.agent_id, task=self.task,
-            task_hash=task_hash, success=False, started_at=self.start_time,
-            context=self.context, tools_used=self.tools_used, model_version=self.model_version,
+            tenant_id=self.tenant_id,
+            agent_id=self.agent_id,
+            task=self.task,
+            task_hash=task_hash,
+            success=False,
+            started_at=self.start_time,
+            context=self.context,
+            tools_used=self.tools_used,
+            model_version=self.model_version,
             metadata={"correlation_id": self.correlation_id},
         )
         self.session.add(self.run)
@@ -146,12 +166,22 @@ class AgentRunLogger:
         self.run_id = self.run.id
 
         self._operation_context = OperationContext(
-            correlation_id=self.correlation_id, operation_id=str(self.run_id), agent_id=self.agent_id
+            correlation_id=self.correlation_id,
+            operation_id=str(self.run_id),
+            agent_id=self.agent_id,
         )
         self._operation_context.__enter__()
 
-        logger.info(f"Agent run started: {self.agent_id}",
-                   extra={"extra_data": {"event": "agent_run_start", "run_id": str(self.run_id), "agent_id": self.agent_id}})
+        logger.info(
+            f"Agent run started: {self.agent_id}",
+            extra={
+                "extra_data": {
+                    "event": "agent_run_start",
+                    "run_id": str(self.run_id),
+                    "agent_id": self.agent_id,
+                }
+            },
+        )
         return self
 
     def __exit__(self, exc_type, exc_val, exc_tb):
@@ -164,11 +194,16 @@ class AgentRunLogger:
             if self.config.store_full_traceback:
                 self.context["traceback"] = tb.format_exception(exc_type, exc_val, exc_tb)
             if self.config.log_errors_to_console:
-                logger.error(f"Agent run failed: {self.agent_id} - {exc_val}", exc_info=(exc_type, exc_val, exc_tb))
+                logger.error(
+                    f"Agent run failed: {self.agent_id} - {exc_val}",
+                    exc_info=(exc_type, exc_val, exc_tb),
+                )
         else:
             if self._success is None:
                 self._success = True
-            logger.info(f"Agent run completed: {self.agent_id} (success={self._success}, duration={duration_ms}ms)")
+            logger.info(
+                f"Agent run completed: {self.agent_id} (success={self._success}, duration={duration_ms}ms)"
+            )
 
         if self.run:
             self.run.success = self._success
@@ -180,7 +215,10 @@ class AgentRunLogger:
             self.run.context = self.context
             self.run.tools_used = self.tools_used
             if self._error_message:
-                self.run.metadata = {**(self.run.metadata or {}), "error_message": self._error_message}
+                self.run.metadata = {
+                    **(self.run.metadata or {}),
+                    "error_message": self._error_message,
+                }
             try:
                 self.session.commit()
             except Exception as e:
@@ -193,14 +231,34 @@ class AgentRunLogger:
             self._operation_context.__exit__(exc_type, exc_val, exc_tb)
         return False
 
-    def set_success(self, solution: Any | None = None, score: float | None = None, feedback: str | None = None):
+    def set_success(
+        self, solution: Any | None = None, score: float | None = None, feedback: str | None = None
+    ):
         self._success, self._solution, self._score, self._feedback = True, solution, score, feedback
 
-    def set_failure(self, error_message: str, score: float | None = None, feedback: str | None = None):
-        self._success, self._error_message, self._score, self._feedback = False, error_message, score, feedback
+    def set_failure(
+        self, error_message: str, score: float | None = None, feedback: str | None = None
+    ):
+        self._success, self._error_message, self._score, self._feedback = (
+            False,
+            error_message,
+            score,
+            feedback,
+        )
 
-    def set_result(self, solution: Any, success: bool = True, score: float | None = None, feedback: str | None = None):
-        self._success, self._solution, self._score, self._feedback = success, solution, score, feedback
+    def set_result(
+        self,
+        solution: Any,
+        success: bool = True,
+        score: float | None = None,
+        feedback: str | None = None,
+    ):
+        self._success, self._solution, self._score, self._feedback = (
+            success,
+            solution,
+            score,
+            feedback,
+        )
 
     def add_tool_used(self, tool_name: str):
         if tool_name not in self.tools_used:
@@ -210,22 +268,39 @@ class AgentRunLogger:
         self.context[key] = value
 
     def get_result(self) -> AgentRunResult:
-        duration_ms = int((datetime.utcnow() - self.start_time).total_seconds() * 1000) if self.start_time else 0
+        duration_ms = (
+            int((datetime.utcnow() - self.start_time).total_seconds() * 1000)
+            if self.start_time
+            else 0
+        )
         return AgentRunResult(
-            run_id=str(self.run_id) if self.run_id else "", success=self._success or False,
-            agent_id=self.agent_id, task=self.task, duration_ms=duration_ms,
-            score=self._score, solution=self._solution, feedback=self._feedback,
-            error_message=self._error_message, correlation_id=self.correlation_id,
+            run_id=str(self.run_id) if self.run_id else "",
+            success=self._success or False,
+            agent_id=self.agent_id,
+            task=self.task,
+            duration_ms=duration_ms,
+            score=self._score,
+            solution=self._solution,
+            feedback=self._feedback,
+            error_message=self._error_message,
+            correlation_id=self.correlation_id,
         )
 
 
-def log_agent_run(agent_id: str, task_param: str = "task", session_param: str = "session",
-                  tenant_id_param: str = "tenant_id", extract_score: Callable[[Any], float] | None = None) -> Callable[[F], F]:
+def log_agent_run(
+    agent_id: str,
+    task_param: str = "task",
+    session_param: str = "session",
+    tenant_id_param: str = "tenant_id",
+    extract_score: Callable[[Any], float] | None = None,
+) -> Callable[[F], F]:
     """Decorator to automatically log agent runs."""
+
     def decorator(func: F) -> F:
         @functools.wraps(func)
         def wrapper(*args, **kwargs):
             import inspect
+
             session = kwargs.get(session_param)
             tenant_id = kwargs.get(tenant_id_param)
             task = kwargs.get(task_param, func.__name__)
@@ -245,19 +320,37 @@ def log_agent_run(agent_id: str, task_param: str = "task", session_param: str = 
             if tenant_id is None:
                 tenant_id = get_default_tenant_id(session)
 
-            context = {k: v for k, v in kwargs.items() if k not in [session_param, tenant_id_param, task_param] and not k.startswith('_')}
+            context = {
+                k: v
+                for k, v in kwargs.items()
+                if k not in [session_param, tenant_id_param, task_param] and not k.startswith("_")
+            }
 
-            with AgentRunLogger(session=session, tenant_id=tenant_id, agent_id=agent_id, task=str(task), context=context) as run_logger:
+            with AgentRunLogger(
+                session=session,
+                tenant_id=tenant_id,
+                agent_id=agent_id,
+                task=str(task),
+                context=context,
+            ) as run_logger:
                 result = func(*args, **kwargs)
                 score = extract_score(result) if extract_score else None
                 run_logger.set_success(solution=result, score=score)
                 return result
+
         return wrapper
+
     return decorator
 
 
-def get_agent_runs(session: Session, tenant_id: str | UUID, agent_id: str | None = None,
-                   success: bool | None = None, limit: int = 100, since: datetime | None = None) -> list[AgentRun]:
+def get_agent_runs(
+    session: Session,
+    tenant_id: str | UUID,
+    agent_id: str | None = None,
+    success: bool | None = None,
+    limit: int = 100,
+    since: datetime | None = None,
+) -> list[AgentRun]:
     """Query agent runs with optional filters."""
     query = session.query(AgentRun).filter(AgentRun.tenant_id == ensure_uuid(tenant_id))
     if agent_id:
@@ -269,9 +362,15 @@ def get_agent_runs(session: Session, tenant_id: str | UUID, agent_id: str | None
     return query.order_by(AgentRun.started_at.desc()).limit(limit).all()
 
 
-def get_similar_runs(session: Session, tenant_id: str | UUID, task: str, limit: int = 5) -> list[AgentRun]:
+def get_similar_runs(
+    session: Session, tenant_id: str | UUID, task: str, limit: int = 5
+) -> list[AgentRun]:
     """Find similar past runs by task hash."""
     task_hash = compute_task_hash(task)
-    return session.query(AgentRun).filter(
-        AgentRun.tenant_id == ensure_uuid(tenant_id), AgentRun.task_hash == task_hash
-    ).order_by(AgentRun.started_at.desc()).limit(limit).all()
+    return (
+        session.query(AgentRun)
+        .filter(AgentRun.tenant_id == ensure_uuid(tenant_id), AgentRun.task_hash == task_hash)
+        .order_by(AgentRun.started_at.desc())
+        .limit(limit)
+        .all()
+    )
