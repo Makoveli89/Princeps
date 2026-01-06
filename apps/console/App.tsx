@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { HashRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { Layout } from './components/Layout';
 import { Dashboard } from './pages/Dashboard';
@@ -12,41 +13,28 @@ import { SystemHealth } from './pages/SystemHealth';
 import { Chatbot } from './pages/Chatbot';
 import { INITIAL_WORKSPACES } from './constants';
 import { Workspace } from './types';
+import { fetcher } from './lib/fetcher';
 
 const App = () => {
-  const [workspaces, setWorkspaces] = useState<Workspace[]>(INITIAL_WORKSPACES);
+  const { data: workspacesData, error, isLoading } = useSWR<Workspace[]>('/api/workspaces', fetcher);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
-  const [loading, setLoading] = useState(true);
 
-  const fetchWorkspaces = async () => {
-    try {
-      const res = await fetch('/api/workspaces');
-      if (res.ok) {
-        const data = await res.json();
-        setWorkspaces(data);
-        if (data.length > 0 && !activeWorkspaceId) {
-          setActiveWorkspaceId(data[0].id);
-        }
-      }
-    } catch (e) {
-      console.error("Failed to fetch workspaces", e);
-    } finally {
-      setLoading(false);
-    }
-  };
+  const workspaces = workspacesData || INITIAL_WORKSPACES;
 
   useEffect(() => {
-    fetchWorkspaces();
-  }, []);
+    if (workspaces && workspaces.length > 0 && !activeWorkspaceId) {
+      setActiveWorkspaceId(workspaces[0].id);
+    }
+  }, [workspaces, activeWorkspaceId]);
 
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];
 
-  if (loading) {
+  if (isLoading) {
      return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 font-mono">INITIALIZING SYSTEM...</div>;
   }
 
   // Handling case where no workspace exists yet
-  if (!activeWorkspace && !loading && workspaces.length === 0) {
+  if (!activeWorkspace && !isLoading && workspaces.length === 0) {
       // Create default if none? Or show empty state?
       // For now let's redirect to workspace creation or show a simplified layout
       // Or just render Workspaces page forced

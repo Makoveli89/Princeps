@@ -1,10 +1,12 @@
 import React, { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   Legend
 } from 'recharts';
 import { Activity, Database, Server, AlertTriangle, ShieldCheck } from 'lucide-react';
 import { Workspace, MetricPoint, AgentRun } from '../types';
+import { fetcher } from '../lib/fetcher';
 
 const StatusCard = ({ title, status, icon: Icon, detail }: { title: string, status: 'ok' | 'err' | 'warn', icon: any, detail: string }) => {
     const color = status === 'ok' ? 'text-emerald-400' : status === 'err' ? 'text-red-500' : 'text-amber-400';
@@ -30,29 +32,11 @@ const StatusCard = ({ title, status, icon: Icon, detail }: { title: string, stat
 };
 
 export const Dashboard = ({ workspace }: { workspace: Workspace }) => {
-    const [metrics, setMetrics] = useState<MetricPoint[]>([]);
-    const [recentFailures, setRecentFailures] = useState<AgentRun[]>([]);
+    const { data: metricsData } = useSWR<MetricPoint[]>('/api/metrics', fetcher);
+    const { data: runsData } = useSWR<AgentRun[]>(workspace ? `/api/runs?workspaceId=${workspace.id}&limit=20` : null, fetcher);
 
-    useEffect(() => {
-        const fetchData = async () => {
-            if (!workspace) return;
-            try {
-                // Fetch metrics
-                const mRes = await fetch('/api/metrics');
-                if (mRes.ok) setMetrics(await mRes.json());
-
-                // Fetch recent runs for failures
-                const rRes = await fetch(`/api/runs?workspaceId=${workspace.id}&limit=20`);
-                if (rRes.ok) {
-                    const runs: AgentRun[] = await rRes.json();
-                    setRecentFailures(runs.filter(r => r.status === 'FAILURE'));
-                }
-            } catch (e) {
-                console.error("Dashboard fetch failed", e);
-            }
-        };
-        fetchData();
-    }, [workspace]);
+    const metrics = metricsData || [];
+    const recentFailures = (runsData || []).filter(r => r.status === 'FAILURE');
 
   return (
     <div className="space-y-6 animate-in fade-in duration-700">

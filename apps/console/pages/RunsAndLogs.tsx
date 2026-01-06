@@ -1,33 +1,20 @@
 import React, { useState, useEffect } from 'react';
+import useSWR from 'swr';
 import { AgentRun, Workspace, RunStatus } from '../types';
 import { FileText, AlertCircle, CheckCircle2, Clock, Terminal, ChevronRight, X } from 'lucide-react';
+import { fetcher } from '../lib/fetcher';
 
 export const RunsAndLogs = ({ workspace }: { workspace: Workspace }) => {
     const [selectedRun, setSelectedRun] = useState<AgentRun | null>(null);
     const [filter, setFilter] = useState<'ALL' | 'FAILURE'>('ALL');
-    const [runs, setRuns] = useState<AgentRun[]>([]);
-    const [loading, setLoading] = useState(false);
 
-    useEffect(() => {
-        const fetchRuns = async () => {
-            if (!workspace) return;
-            setLoading(true);
-            try {
-                const res = await fetch(`/api/runs?workspaceId=${workspace.id}&limit=50`);
-                if (res.ok) {
-                    const data = await res.json();
-                    setRuns(data);
-                }
-            } catch (e) {
-                console.error(e);
-            } finally {
-                setLoading(false);
-            }
-        };
-        fetchRuns();
-    }, [workspace]);
+    const { data: runs, isLoading: loading } = useSWR<AgentRun[]>(
+        workspace ? `/api/runs?workspaceId=${workspace.id}&limit=50` : null,
+        fetcher,
+        { refreshInterval: 2000 }
+    );
 
-    const filteredRuns = runs.filter(run => {
+    const filteredRuns = (runs || []).filter(run => {
         if (filter === 'FAILURE') return run.status === RunStatus.FAILURE;
         return true;
     });
