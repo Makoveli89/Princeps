@@ -113,10 +113,8 @@ opentelemetry-semantic-conventions==0.50b0
 pypika==0.48.9
 tenacity==9.0.0
 posthog==3.9.0
-pydantic-settings==2.7.1
 bcrypt==4.2.1
 rich==13.9.4
-typer==0.15.3
 
 # Streamlit dependencies
 altair==5.5.0
@@ -133,7 +131,6 @@ gitpython==3.1.44
 streamlit-camera-input-live==0.2.0
 streamlit-card==1.0.2
 streamlit-embedcode==0.1.2
-streamlit-extras==0.5.1
 streamlit-faker==0.0.3
 streamlit-image-coordinates==0.1.9
 streamlit-keyup==0.2.4
