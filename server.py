@@ -4,10 +4,14 @@ load_dotenv()  # Load .env file
 import uuid
 import datetime
 import asyncio
+import sys
+import logging
+import time
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 import logging
 
+import structlog
 import uvicorn
 from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -17,6 +21,32 @@ from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from pydantic import BaseModel
 from sqlalchemy import func, desc, text
+
+# --- Structlog Configuration ---
+
+# Configure standard logging to intercept basic logs
+logging.basicConfig(format="%(message)s", stream=sys.stdout, level=logging.INFO)
+
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger()
 
 # Princeps Imports
 from brain.core.db import get_engine, init_db, get_session
@@ -57,9 +87,9 @@ async def lifespan(app: FastAPI):
         # unconditionally, but for "easy set up" it's helpful.
         # It handles "IF NOT EXISTS" internally.
         init_db(engine)
-        print("✅ Database initialized.")
+        logger.info("database_initialized")
     except Exception as e:
-        print(f"❌ Database initialization failed. Ensure Postgres is running. Error: {e}")
+        logger.error("database_initialization_failed", error=str(e))
 
     yield
     # Cleanup if needed
@@ -151,7 +181,7 @@ def get_db():
             yield session
     except Exception as e:
         # Yield None if DB is down, to allow fallback logic in endpoints
-        print(f"DB Connection failed: {e}")
+        logger.error("db_connection_failed", error=str(e))
         yield None
 
 # --- Helper: Fake Agent Manager ---
@@ -352,7 +382,7 @@ async def run_agent(request: Request, body: RunRequest):
         }
     except Exception as e:
         error_id = str(uuid.uuid4())
-        print(f"Agent run failed [ID: {error_id}]: {e}")
+        logger.error("agent_run_failed", error_id=error_id, error=str(e))
         # SENTINEL FIX: Prevent information leakage by hiding internal error details
         raise HTTPException(status_code=500, detail=f"Internal server error. Error ID: {error_id}")
 
@@ -367,7 +397,7 @@ async def execute_skill(request: Request, body: SkillRunRequest):
         return result
     except Exception as e:
         error_id = str(uuid.uuid4())
-        print(f"Skill execution failed [ID: {error_id}]: {e}")
+        logger.error("skill_execution_failed", error_id=error_id, error=str(e))
         # SENTINEL FIX: Prevent information leakage by hiding internal error details
         raise HTTPException(status_code=500, detail=f"Internal server error. Error ID: {error_id}")
 
