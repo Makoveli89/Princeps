@@ -28,7 +28,8 @@ If applicable, add screenshots to help explain your problem.
  - Browser (if applicable): [e.g. Chrome, Safari]
  - Version/Commit: [e.g. 22]
  - Python Version: [e.g. 3.10]
- - Node Version: [e.g. 18]
+ - Node Version (Console/UI issues only, if applicable): [e.g. 18]
+ - Component: [Backend | Console (UI) | Other]
 
 **Additional context**
 Add any other context about the problem here.
