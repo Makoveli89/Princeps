@@ -8,8 +8,12 @@ from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
+from slowapi import Limiter, _rate_limit_exceeded_handler
+from slowapi.util import get_remote_address
+from slowapi.errors import RateLimitExceeded
+from slowapi.middleware import SlowAPIMiddleware
 from pydantic import BaseModel
 from sqlalchemy import func, desc, text
 
@@ -57,6 +61,11 @@ async def lifespan(app: FastAPI):
 
 app = FastAPI(title="Princeps Console Backend", version="0.1.0", lifespan=lifespan)
 
+# Initialize Limiter
+limiter = Limiter(key_func=get_remote_address)
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
+
 # Enable CORS for local development
 app.add_middleware(
     CORSMiddleware,
@@ -65,6 +74,8 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.add_middleware(SlowAPIMiddleware)
 
 # --- Types ---
 
@@ -331,7 +342,8 @@ def get_agents():
     return agent_manager.get_agents()
 
 @app.post("/api/run")
-async def run_agent(request: RunRequest):
+@limiter.limit("5/minute")
+async def run_agent(request: Request, body: RunRequest):
     # For simplicity in this version, we'll await it (blocking).
     # In production, use background_tasks.add_task or a queue (Celery/Redis).
     # Since BaseAgent calls can be long, we should ideally be async.
@@ -339,7 +351,7 @@ async def run_agent(request: RunRequest):
     try:
         # Note: This will fail if no API keys are present in env, which is expected.
         # The UI should handle the error.
-        result = await agent_manager.run_agent(request.agentId, request.input, request.workspaceId)
+        result = await agent_manager.run_agent(body.agentId, body.input, body.workspaceId)
         return {
             "status": "success",
             "run_id": result.get("task_id"),
@@ -353,12 +365,13 @@ async def run_agent(request: RunRequest):
         raise HTTPException(status_code=500, detail=f"Internal server error. Error ID: {error_id}")
 
 @app.post("/api/skills/execute")
-async def execute_skill(request: SkillRunRequest):
+@limiter.limit("10/minute")
+async def execute_skill(request: Request, body: SkillRunRequest):
     """
     Execute a natural language skill.
     """
     try:
-        result = await agent_manager.run_skill(request.query, request.workspaceId)
+        result = await agent_manager.run_skill(body.query, body.workspaceId)
         return result
     except Exception as e:
         error_id = str(uuid.uuid4())
@@ -369,7 +382,9 @@ async def execute_skill(request: SkillRunRequest):
 # --- New Endpoints ---
 
 @app.post("/api/ingest")
+@limiter.limit("10/minute")
 async def ingest_document(
+    request: Request,
     file: UploadFile = File(...),
     workspace_id: str = Form(...)
 ):
@@ -386,7 +401,9 @@ async def ingest_document(
         raise HTTPException(status_code=500, detail=str(e))
 
 @app.get("/api/search", response_model=List[SearchResultDTO])
+@limiter.limit("20/minute")
 async def search_knowledge(
+    request: Request,
     q: str,
     workspaceId: str,
     limit: int = 10,
