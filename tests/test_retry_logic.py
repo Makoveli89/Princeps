@@ -1,12 +1,14 @@
 """Tests for retry logic with transient failure scenarios."""
-import pytest
-from unittest.mock import MagicMock, patch, call
+
 import time
+from unittest.mock import MagicMock
+
+import pytest
 
 from brain.resilience.retry_manager import (
+    ExponentialBackoff,
     RetryConfig,
     RetryManager,
-    ExponentialBackoff,
     retry_with_backoff,
 )
 
@@ -113,6 +115,7 @@ class TestRetryWithBackoffDecorator:
 
     def test_decorator_preserves_function_metadata(self):
         """Decorator should preserve function name and docstring."""
+
         @retry_with_backoff()
         def example_function():
             """Example docstring."""
@@ -131,11 +134,13 @@ class TestMockedDownloadFailure:
         manager = RetryManager(config)
 
         # Simulate network errors then success
-        network_call = MagicMock(side_effect=[
-            ConnectionError("Network unreachable"),
-            TimeoutError("Connection timed out"),
-            {"status": "success", "data": "downloaded"}
-        ])
+        network_call = MagicMock(
+            side_effect=[
+                ConnectionError("Network unreachable"),
+                TimeoutError("Connection timed out"),
+                {"status": "success", "data": "downloaded"},
+            ]
+        )
 
         result = manager.execute(network_call)
 
@@ -150,10 +155,9 @@ class TestMockedDownloadFailure:
         class HTTP500Error(Exception):
             pass
 
-        http_call = MagicMock(side_effect=[
-            HTTP500Error("Internal Server Error"),
-            {"status": 200, "body": "OK"}
-        ])
+        http_call = MagicMock(
+            side_effect=[HTTP500Error("Internal Server Error"), {"status": 200, "body": "OK"}]
+        )
 
         result = manager.execute(http_call)
         assert result["status"] == 200
@@ -185,10 +189,9 @@ class TestRetryWithDatabaseTransient:
         class DBConnectionError(Exception):
             pass
 
-        db_call = MagicMock(side_effect=[
-            DBConnectionError("Connection lost"),
-            {"inserted": True, "id": 123}
-        ])
+        db_call = MagicMock(
+            side_effect=[DBConnectionError("Connection lost"), {"inserted": True, "id": 123}]
+        )
 
         result = manager.execute(db_call)
         assert result["inserted"] is True
@@ -250,11 +253,7 @@ class TestRetryConfigDefaults:
     def test_custom_config(self):
         """Should accept custom configuration."""
         config = RetryConfig(
-            max_retries=5,
-            initial_delay=0.5,
-            max_delay=30.0,
-            exponential_base=1.5,
-            jitter=False
+            max_retries=5, initial_delay=0.5, max_delay=30.0, exponential_base=1.5, jitter=False
         )
 
         assert config.max_retries == 5

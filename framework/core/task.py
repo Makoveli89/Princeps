@@ -28,12 +28,12 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Union
-
+from typing import Any
 
 # =============================================================================
 # Task Type Enumeration
 # =============================================================================
+
 
 class TaskType(Enum):
     """
@@ -41,41 +41,43 @@ class TaskType(Enum):
 
     Each task type maps to a specific workflow of agent invocations.
     """
+
     # Query and reasoning tasks
-    ASK_QUESTION = "ask_question"           # Answer a user question
+    ASK_QUESTION = "ask_question"  # Answer a user question
     COMPLEX_REASONING = "complex_reasoning"  # Multi-step reasoning
-    SEARCH = "search"                        # Search knowledge base
+    SEARCH = "search"  # Search knowledge base
 
     # Planning and execution tasks
-    PLAN = "plan"                            # Create a plan for a goal
-    EXECUTE_PLAN = "execute_plan"            # Execute an existing plan
-    PLAN_AND_EXECUTE = "plan_and_execute"    # Full planning + execution
+    PLAN = "plan"  # Create a plan for a goal
+    EXECUTE_PLAN = "execute_plan"  # Execute an existing plan
+    PLAN_AND_EXECUTE = "plan_and_execute"  # Full planning + execution
 
     # Document and knowledge tasks
-    INGEST_DOCUMENT = "ingest_document"      # Ingest a new document
-    ANALYZE_DOCUMENT = "analyze_document"    # Full document analysis
-    SUMMARIZE = "summarize"                  # Generate summary
-    EXTRACT_ENTITIES = "extract_entities"    # Extract named entities
-    EXTRACT_TOPICS = "extract_topics"        # Extract topics
-    EXTRACT_CONCEPTS = "extract_concepts"    # Build concept graph
+    INGEST_DOCUMENT = "ingest_document"  # Ingest a new document
+    ANALYZE_DOCUMENT = "analyze_document"  # Full document analysis
+    SUMMARIZE = "summarize"  # Generate summary
+    EXTRACT_ENTITIES = "extract_entities"  # Extract named entities
+    EXTRACT_TOPICS = "extract_topics"  # Extract topics
+    EXTRACT_CONCEPTS = "extract_concepts"  # Build concept graph
 
     # Knowledge distillation (combined)
     DISTILL_KNOWLEDGE = "distill_knowledge"  # Run all distillation agents
 
     # Retrieval tasks
-    RETRIEVE = "retrieve"                    # Retrieve relevant knowledge
-    SEMANTIC_SEARCH = "semantic_search"      # Vector-based search
+    RETRIEVE = "retrieve"  # Retrieve relevant knowledge
+    SEMANTIC_SEARCH = "semantic_search"  # Vector-based search
 
     # Administrative tasks
-    HEALTH_CHECK = "health_check"            # System health check
-    CLEAR_CACHE = "clear_cache"              # Clear caches
+    HEALTH_CHECK = "health_check"  # System health check
+    CLEAR_CACHE = "clear_cache"  # Clear caches
 
     # Custom/extensible
-    CUSTOM = "custom"                        # Custom workflow
+    CUSTOM = "custom"  # Custom workflow
 
 
 class TaskPriority(Enum):
     """Priority levels for task scheduling."""
+
     LOW = 1
     NORMAL = 2
     HIGH = 3
@@ -85,6 +87,7 @@ class TaskPriority(Enum):
 
 class TaskStatus(Enum):
     """Status of a task through its lifecycle."""
+
     PENDING = "pending"
     QUEUED = "queued"
     IN_PROGRESS = "in_progress"
@@ -99,6 +102,7 @@ class TaskStatus(Enum):
 # Task Context
 # =============================================================================
 
+
 @dataclass
 class TaskContext:
     """
@@ -107,15 +111,16 @@ class TaskContext:
     Contains correlation IDs, tenant info, and other contextual data
     that propagates through all agent runs.
     """
+
     # Correlation and tracing
     correlation_id: str = field(default_factory=lambda: f"corr-{uuid.uuid4().hex[:12]}")
-    parent_task_id: Optional[str] = None
-    trace_id: Optional[str] = None
+    parent_task_id: str | None = None
+    trace_id: str | None = None
 
     # Tenant and user
-    tenant_id: Optional[str] = None
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
+    tenant_id: str | None = None
+    user_id: str | None = None
+    session_id: str | None = None
 
     # Environment
     environment: str = "development"
@@ -131,9 +136,9 @@ class TaskContext:
     enable_idempotency: bool = True
 
     # Additional context
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "correlation_id": self.correlation_id,
@@ -170,6 +175,7 @@ class TaskContext:
 # Task Definition
 # =============================================================================
 
+
 @dataclass
 class Task:
     """
@@ -181,31 +187,32 @@ class Task:
     - Execution context
     - Routing hints
     """
+
     # Identity
     id: str = field(default_factory=lambda: f"task-{uuid.uuid4().hex[:16]}")
     type: TaskType = TaskType.CUSTOM
 
     # Payload
-    payload: Dict[str, Any] = field(default_factory=dict)
+    payload: dict[str, Any] = field(default_factory=dict)
 
     # Context
     context: TaskContext = field(default_factory=TaskContext)
 
     # Timestamps
     created_at: datetime = field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     # Status
     status: TaskStatus = TaskStatus.PENDING
 
     # Routing hints
-    preferred_agents: Optional[List[str]] = None
-    excluded_agents: Optional[List[str]] = None
-    workflow_override: Optional[str] = None
+    preferred_agents: list[str] | None = None
+    excluded_agents: list[str] | None = None
+    workflow_override: str | None = None
 
     # Idempotency
-    input_hash: Optional[str] = None
+    input_hash: str | None = None
 
     def __post_init__(self):
         """Compute input hash for idempotency."""
@@ -235,7 +242,7 @@ class Task:
             return [self._normalize_for_hash(v) for v in value]
         return value
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "id": self.id,
@@ -250,7 +257,7 @@ class Task:
         }
 
     @classmethod
-    def from_dict(cls, data: Dict[str, Any]) -> "Task":
+    def from_dict(cls, data: dict[str, Any]) -> "Task":
         """Create Task from dictionary."""
         context_data = data.get("context", {})
         priority = context_data.get("priority", TaskPriority.NORMAL.value)
@@ -284,6 +291,7 @@ class Task:
 # Task Result
 # =============================================================================
 
+
 @dataclass
 class TaskResult:
     """
@@ -291,6 +299,7 @@ class TaskResult:
 
     Contains the output, status, and execution metadata.
     """
+
     # Identity
     task_id: str
     task_type: TaskType
@@ -301,22 +310,22 @@ class TaskResult:
 
     # Output
     output: Any = None
-    error: Optional[str] = None
-    error_details: Optional[Dict[str, Any]] = None
+    error: str | None = None
+    error_details: dict[str, Any] | None = None
 
     # Execution info
     duration_ms: float = 0.0
-    agents_invoked: List[str] = field(default_factory=list)
-    sub_task_ids: List[str] = field(default_factory=list)
+    agents_invoked: list[str] = field(default_factory=list)
+    sub_task_ids: list[str] = field(default_factory=list)
 
     # Caching
     was_cached: bool = False
-    cache_key: Optional[str] = None
+    cache_key: str | None = None
 
     # Metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "task_id": self.task_id,
@@ -338,6 +347,7 @@ class TaskResult:
 # Sub-Task Definition
 # =============================================================================
 
+
 @dataclass
 class SubTask:
     """
@@ -345,16 +355,17 @@ class SubTask:
 
     Used by the Dispatcher to break complex tasks into steps.
     """
+
     id: str = field(default_factory=lambda: f"subtask-{uuid.uuid4().hex[:12]}")
     parent_task_id: str = ""
     agent_type: str = ""  # Which agent to invoke
-    input_data: Dict[str, Any] = field(default_factory=dict)
-    depends_on: List[str] = field(default_factory=list)  # IDs of prerequisite sub-tasks
+    input_data: dict[str, Any] = field(default_factory=dict)
+    depends_on: list[str] = field(default_factory=list)  # IDs of prerequisite sub-tasks
     status: TaskStatus = TaskStatus.PENDING
-    result: Optional[Any] = None
-    error: Optional[str] = None
+    result: Any | None = None
+    error: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "id": self.id,
@@ -372,16 +383,18 @@ class SubTask:
 # Workflow Definition
 # =============================================================================
 
+
 @dataclass
 class WorkflowStep:
     """A single step in a workflow definition."""
+
     name: str
     agent_type: str
-    input_mapping: Dict[str, str] = field(default_factory=dict)  # Maps workflow vars to agent input
-    output_key: Optional[str] = None  # Key to store output in workflow context
-    condition: Optional[str] = None  # Optional condition to check before running
+    input_mapping: dict[str, str] = field(default_factory=dict)  # Maps workflow vars to agent input
+    output_key: str | None = None  # Key to store output in workflow context
+    condition: str | None = None  # Optional condition to check before running
     on_error: str = "fail"  # "fail", "skip", "retry", "fallback"
-    fallback_agent: Optional[str] = None
+    fallback_agent: str | None = None
     max_retries: int = 0
 
 
@@ -392,13 +405,14 @@ class Workflow:
 
     Workflows define the sequence of agent invocations for a task type.
     """
+
     name: str
     task_type: TaskType
-    steps: List[WorkflowStep]
+    steps: list[WorkflowStep]
     description: str = ""
     version: str = "1.0"
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "name": self.name,
@@ -423,11 +437,12 @@ class Workflow:
 # Factory Functions
 # =============================================================================
 
+
 def create_task(
-    task_type: Union[TaskType, str],
-    payload: Dict[str, Any],
-    tenant_id: Optional[str] = None,
-    user_id: Optional[str] = None,
+    task_type: TaskType | str,
+    payload: dict[str, Any],
+    tenant_id: str | None = None,
+    user_id: str | None = None,
     priority: TaskPriority = TaskPriority.NORMAL,
     **kwargs,
 ) -> Task:
@@ -464,8 +479,8 @@ def create_task(
 
 def create_question_task(
     question: str,
-    tenant_id: Optional[str] = None,
-    context_documents: Optional[List[str]] = None,
+    tenant_id: str | None = None,
+    context_documents: list[str] | None = None,
     **kwargs,
 ) -> Task:
     """Create a task for answering a question."""
@@ -483,8 +498,8 @@ def create_question_task(
 def create_document_task(
     content: str,
     source: str = "user_upload",
-    title: Optional[str] = None,
-    tenant_id: Optional[str] = None,
+    title: str | None = None,
+    tenant_id: str | None = None,
     analyze: bool = True,
     **kwargs,
 ) -> Task:
@@ -505,8 +520,8 @@ def create_document_task(
 
 def create_plan_task(
     goal: str,
-    constraints: Optional[List[str]] = None,
-    tenant_id: Optional[str] = None,
+    constraints: list[str] | None = None,
+    tenant_id: str | None = None,
     execute: bool = False,
     **kwargs,
 ) -> Task:

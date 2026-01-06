@@ -20,27 +20,16 @@ Patterns adapted from:
 """
 
 import asyncio
-import hashlib
-import json
 import logging
-import math
 import statistics
-import time
 import uuid
-from abc import ABC, abstractmethod
 from collections import defaultdict
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from enum import Enum
 from typing import (
     Any,
-    Callable,
-    Dict,
-    List,
-    Optional,
-    Set,
-    Tuple,
-    Union,
 )
 
 logger = logging.getLogger(__name__)
@@ -50,8 +39,10 @@ logger = logging.getLogger(__name__)
 # Enums and Constants
 # =============================================================================
 
+
 class MetricType(Enum):
     """Types of metrics that can be tracked."""
+
     SUCCESS_RATE = "success_rate"
     LATENCY_P50 = "latency_p50"
     LATENCY_P95 = "latency_p95"
@@ -69,6 +60,7 @@ class MetricType(Enum):
 
 class TimeWindow(Enum):
     """Time windows for metric aggregation."""
+
     MINUTE = 60
     FIVE_MINUTES = 300
     FIFTEEN_MINUTES = 900
@@ -79,6 +71,7 @@ class TimeWindow(Enum):
 
 class TrendDirection(Enum):
     """Direction of a trend."""
+
     IMPROVING = "improving"
     DECLINING = "declining"
     STABLE = "stable"
@@ -87,6 +80,7 @@ class TrendDirection(Enum):
 
 class AlertSeverity(Enum):
     """Severity levels for metric alerts."""
+
     INFO = "info"
     WARNING = "warning"
     ERROR = "error"
@@ -95,6 +89,7 @@ class AlertSeverity(Enum):
 
 class RewardType(Enum):
     """Types of RL rewards."""
+
     SUCCESS = "success"
     FAILURE = "failure"
     PARTIAL = "partial"
@@ -106,21 +101,24 @@ class RewardType(Enum):
 # Data Classes
 # =============================================================================
 
+
 @dataclass
 class MetricDataPoint:
     """A single metric data point."""
+
     metric_type: MetricType
     value: float
     timestamp: datetime
     agent_id: str
-    tenant_id: Optional[str] = None
-    correlation_id: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    tenant_id: str | None = None
+    correlation_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
 
 @dataclass
 class AggregatedMetric:
     """Aggregated metric over a time window."""
+
     metric_type: MetricType
     agent_id: str
     window: TimeWindow
@@ -130,17 +128,17 @@ class AggregatedMetric:
     # Statistics
     count: int = 0
     sum_value: float = 0.0
-    min_value: float = float('inf')
-    max_value: float = float('-inf')
+    min_value: float = float("inf")
+    max_value: float = float("-inf")
     mean_value: float = 0.0
     std_dev: float = 0.0
-    percentiles: Dict[int, float] = field(default_factory=dict)
+    percentiles: dict[int, float] = field(default_factory=dict)
 
     # Metadata
-    tenant_id: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    tenant_id: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "metric_type": self.metric_type.value,
@@ -150,8 +148,8 @@ class AggregatedMetric:
             "end_time": self.end_time.isoformat(),
             "count": self.count,
             "sum": self.sum_value,
-            "min": self.min_value if self.min_value != float('inf') else None,
-            "max": self.max_value if self.max_value != float('-inf') else None,
+            "min": self.min_value if self.min_value != float("inf") else None,
+            "max": self.max_value if self.max_value != float("-inf") else None,
             "mean": self.mean_value,
             "std_dev": self.std_dev,
             "percentiles": self.percentiles,
@@ -163,16 +161,17 @@ class AggregatedMetric:
 @dataclass
 class TrendAnalysis:
     """Result of trend analysis."""
+
     metric_type: MetricType
     agent_id: str
     direction: TrendDirection
     slope: float  # Rate of change
     r_squared: float  # Correlation strength
-    forecast_value: Optional[float] = None
+    forecast_value: float | None = None
     confidence: float = 0.0
-    anomalies: List[datetime] = field(default_factory=list)
+    anomalies: list[datetime] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "metric_type": self.metric_type.value,
@@ -189,6 +188,7 @@ class TrendAnalysis:
 @dataclass
 class Alert:
     """A metric alert."""
+
     id: str
     severity: AlertSeverity
     metric_type: MetricType
@@ -200,7 +200,7 @@ class Alert:
     acknowledged: bool = False
     resolved: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "id": self.id,
@@ -219,14 +219,15 @@ class Alert:
 @dataclass
 class Reward:
     """An RL reward signal."""
+
     reward_type: RewardType
     value: float
     agent_id: str
     action_id: str
     timestamp: datetime = field(default_factory=datetime.utcnow)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "reward_type": self.reward_type.value,
@@ -241,15 +242,16 @@ class Reward:
 @dataclass
 class AdjustmentRecommendation:
     """Recommendation for agent adjustment."""
+
     agent_id: str
     recommendation_type: str
     description: str
     confidence: float
-    suggested_changes: Dict[str, Any]
+    suggested_changes: dict[str, Any]
     expected_improvement: float
     timestamp: datetime = field(default_factory=datetime.utcnow)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary."""
         return {
             "agent_id": self.agent_id,
@@ -265,8 +267,9 @@ class AdjustmentRecommendation:
 @dataclass
 class StrategyMetricsConfig:
     """Configuration for StrategyMetrics."""
+
     # Aggregation
-    aggregation_windows: List[TimeWindow] = field(
+    aggregation_windows: list[TimeWindow] = field(
         default_factory=lambda: [TimeWindow.MINUTE, TimeWindow.HOUR, TimeWindow.DAY]
     )
     retention_hours: int = 168  # 7 days
@@ -299,6 +302,7 @@ class StrategyMetricsConfig:
 # Metric Collector
 # =============================================================================
 
+
 class MetricCollector:
     """
     Collects and stores raw metric data points.
@@ -314,9 +318,9 @@ class MetricCollector:
             config: Configuration settings
         """
         self.config = config
-        self._data_points: Dict[str, List[MetricDataPoint]] = defaultdict(list)
+        self._data_points: dict[str, list[MetricDataPoint]] = defaultdict(list)
         self._lock = asyncio.Lock()
-        self._cleanup_task: Optional[asyncio.Task] = None
+        self._cleanup_task: asyncio.Task | None = None
 
     async def record(self, data_point: MetricDataPoint) -> None:
         """
@@ -330,7 +334,7 @@ class MetricCollector:
         async with self._lock:
             self._data_points[key].append(data_point)
 
-    async def record_batch(self, data_points: List[MetricDataPoint]) -> None:
+    async def record_batch(self, data_points: list[MetricDataPoint]) -> None:
         """
         Record multiple data points.
 
@@ -346,9 +350,9 @@ class MetricCollector:
         self,
         agent_id: str,
         metric_type: MetricType,
-        start_time: Optional[datetime] = None,
-        end_time: Optional[datetime] = None,
-    ) -> List[MetricDataPoint]:
+        start_time: datetime | None = None,
+        end_time: datetime | None = None,
+    ) -> list[MetricDataPoint]:
         """
         Retrieve data points for a metric.
 
@@ -392,8 +396,7 @@ class MetricCollector:
             for key in list(self._data_points.keys()):
                 original_count = len(self._data_points[key])
                 self._data_points[key] = [
-                    p for p in self._data_points[key]
-                    if p.timestamp >= cutoff
+                    p for p in self._data_points[key] if p.timestamp >= cutoff
                 ]
                 removed += original_count - len(self._data_points[key])
 
@@ -406,6 +409,7 @@ class MetricCollector:
 
     async def start_cleanup_loop(self, interval_seconds: int = 3600) -> None:
         """Start background cleanup task."""
+
         async def cleanup_loop():
             while True:
                 await asyncio.sleep(interval_seconds)
@@ -427,6 +431,7 @@ class MetricCollector:
 # Metrics Aggregator
 # =============================================================================
 
+
 class MetricsAggregator:
     """
     Aggregates raw metrics into statistical summaries.
@@ -444,14 +449,14 @@ class MetricsAggregator:
         """
         self.collector = collector
         self.config = config
-        self._aggregations: Dict[str, AggregatedMetric] = {}
+        self._aggregations: dict[str, AggregatedMetric] = {}
 
     async def aggregate(
         self,
         agent_id: str,
         metric_type: MetricType,
         window: TimeWindow,
-        end_time: Optional[datetime] = None,
+        end_time: datetime | None = None,
     ) -> AggregatedMetric:
         """
         Aggregate metrics over a time window.
@@ -514,7 +519,7 @@ class MetricsAggregator:
         self,
         agent_id: str,
         metric_type: MetricType,
-    ) -> Dict[TimeWindow, AggregatedMetric]:
+    ) -> dict[TimeWindow, AggregatedMetric]:
         """
         Aggregate metrics across all configured windows.
 
@@ -535,7 +540,7 @@ class MetricsAggregator:
         agent_id: str,
         metric_type: MetricType,
         window: TimeWindow,
-    ) -> Optional[AggregatedMetric]:
+    ) -> AggregatedMetric | None:
         """Get cached aggregation if available."""
         cache_key = f"{agent_id}:{metric_type.value}:{window.value}"
         return self._aggregations.get(cache_key)
@@ -544,6 +549,7 @@ class MetricsAggregator:
 # =============================================================================
 # Trend Analyzer
 # =============================================================================
+
 
 class TrendAnalyzer:
     """
@@ -612,14 +618,22 @@ class TrendAnalyzer:
         if r_squared >= 0.5:  # Strong correlation
             if slope > 0:
                 # For latency, increasing is declining; for success rate, increasing is improving
-                if metric_type in [MetricType.SUCCESS_RATE, MetricType.USER_SATISFACTION,
-                                   MetricType.THROUGHPUT, MetricType.CACHE_HIT_RATE]:
+                if metric_type in [
+                    MetricType.SUCCESS_RATE,
+                    MetricType.USER_SATISFACTION,
+                    MetricType.THROUGHPUT,
+                    MetricType.CACHE_HIT_RATE,
+                ]:
                     direction = TrendDirection.IMPROVING
                 else:
                     direction = TrendDirection.DECLINING
             elif slope < 0:
-                if metric_type in [MetricType.SUCCESS_RATE, MetricType.USER_SATISFACTION,
-                                   MetricType.THROUGHPUT, MetricType.CACHE_HIT_RATE]:
+                if metric_type in [
+                    MetricType.SUCCESS_RATE,
+                    MetricType.USER_SATISFACTION,
+                    MetricType.THROUGHPUT,
+                    MetricType.CACHE_HIT_RATE,
+                ]:
                     direction = TrendDirection.DECLINING
                 else:
                     direction = TrendDirection.IMPROVING
@@ -648,9 +662,9 @@ class TrendAnalyzer:
 
     def _linear_regression(
         self,
-        x: List[float],
-        y: List[float],
-    ) -> Tuple[float, float, float]:
+        x: list[float],
+        y: list[float],
+    ) -> tuple[float, float, float]:
         """
         Compute linear regression.
 
@@ -687,8 +701,8 @@ class TrendAnalyzer:
 
     def _detect_anomalies(
         self,
-        data_points: List[MetricDataPoint],
-    ) -> List[datetime]:
+        data_points: list[MetricDataPoint],
+    ) -> list[datetime]:
         """
         Detect anomalies using z-score.
 
@@ -718,6 +732,7 @@ class TrendAnalyzer:
 # Reward Calculator
 # =============================================================================
 
+
 class RewardCalculator:
     """
     Calculates RL rewards based on agent outcomes.
@@ -733,18 +748,18 @@ class RewardCalculator:
             config: Configuration settings
         """
         self.config = config
-        self._reward_history: List[Reward] = []
+        self._reward_history: list[Reward] = []
 
     def calculate_reward(
         self,
         agent_id: str,
         action_id: str,
         success: bool,
-        score: Optional[float] = None,
-        latency_ms: Optional[float] = None,
-        error: Optional[str] = None,
+        score: float | None = None,
+        latency_ms: float | None = None,
+        error: str | None = None,
         timeout: bool = False,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Reward:
         """
         Calculate reward for an agent action.
@@ -780,7 +795,7 @@ class RewardCalculator:
             if latency_ms is not None:
                 # Penalize slow responses (up to 20% reduction)
                 latency_factor = min(1.0, self.config.latency_warning_ms / max(latency_ms, 1))
-                value *= (0.8 + 0.2 * latency_factor)
+                value *= 0.8 + 0.2 * latency_factor
         else:
             # Failure but no error/timeout
             if score is not None and score > 0:
@@ -804,7 +819,7 @@ class RewardCalculator:
     def get_cumulative_reward(
         self,
         agent_id: str,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> float:
         """
         Get cumulative reward for an agent.
@@ -828,7 +843,7 @@ class RewardCalculator:
     def get_average_reward(
         self,
         agent_id: str,
-        since: Optional[datetime] = None,
+        since: datetime | None = None,
     ) -> float:
         """
         Get average reward for an agent.
@@ -855,14 +870,14 @@ class RewardCalculator:
     def get_reward_distribution(
         self,
         agent_id: str,
-    ) -> Dict[RewardType, int]:
+    ) -> dict[RewardType, int]:
         """
         Get distribution of reward types.
 
         Returns:
             Count of each reward type
         """
-        distribution: Dict[RewardType, int] = defaultdict(int)
+        distribution: dict[RewardType, int] = defaultdict(int)
         for reward in self._reward_history:
             if reward.agent_id == agent_id:
                 distribution[reward.reward_type] += 1
@@ -872,6 +887,7 @@ class RewardCalculator:
 # =============================================================================
 # Alert Manager
 # =============================================================================
+
 
 class AlertManager:
     """
@@ -888,8 +904,8 @@ class AlertManager:
             config: Configuration settings
         """
         self.config = config
-        self._alerts: List[Alert] = []
-        self._alert_callbacks: List[Callable[[Alert], None]] = []
+        self._alerts: list[Alert] = []
+        self._alert_callbacks: list[Callable[[Alert], None]] = []
 
     def register_callback(self, callback: Callable[[Alert], None]) -> None:
         """Register alert callback."""
@@ -900,7 +916,7 @@ class AlertManager:
         agent_id: str,
         metric_type: MetricType,
         value: float,
-    ) -> Optional[Alert]:
+    ) -> Alert | None:
         """
         Check if a metric value crosses thresholds.
 
@@ -1006,9 +1022,9 @@ class AlertManager:
 
     def get_active_alerts(
         self,
-        agent_id: Optional[str] = None,
-        severity: Optional[AlertSeverity] = None,
-    ) -> List[Alert]:
+        agent_id: str | None = None,
+        severity: AlertSeverity | None = None,
+    ) -> list[Alert]:
         """Get active (unresolved) alerts."""
         alerts = [a for a in self._alerts if not a.resolved]
 
@@ -1040,6 +1056,7 @@ class AlertManager:
 # Adjustment Trigger
 # =============================================================================
 
+
 class AdjustmentTrigger:
     """
     Generates recommendations for agent adjustments.
@@ -1068,7 +1085,7 @@ class AdjustmentTrigger:
     async def analyze_and_recommend(
         self,
         agent_id: str,
-    ) -> List[AdjustmentRecommendation]:
+    ) -> list[AdjustmentRecommendation]:
         """
         Analyze metrics and generate recommendations.
 
@@ -1091,18 +1108,20 @@ class AdjustmentTrigger:
             )
 
             if success_trend.direction == TrendDirection.DECLINING:
-                recommendations.append(AdjustmentRecommendation(
-                    agent_id=agent_id,
-                    recommendation_type="model_upgrade",
-                    description="Success rate declining. Consider upgrading to a more capable model.",
-                    confidence=success_trend.confidence,
-                    suggested_changes={
-                        "action": "upgrade_model",
-                        "current_success_rate": success_agg.mean_value,
-                        "trend_slope": success_trend.slope,
-                    },
-                    expected_improvement=0.1,
-                ))
+                recommendations.append(
+                    AdjustmentRecommendation(
+                        agent_id=agent_id,
+                        recommendation_type="model_upgrade",
+                        description="Success rate declining. Consider upgrading to a more capable model.",
+                        confidence=success_trend.confidence,
+                        suggested_changes={
+                            "action": "upgrade_model",
+                            "current_success_rate": success_agg.mean_value,
+                            "trend_slope": success_trend.slope,
+                        },
+                        expected_improvement=0.1,
+                    )
+                )
 
         # Check latency
         latency_agg = await self.aggregator.aggregate(
@@ -1111,18 +1130,20 @@ class AdjustmentTrigger:
 
         if latency_agg.count >= self.config.min_samples_for_adjustment:
             if latency_agg.mean_value > self.config.latency_warning_ms:
-                recommendations.append(AdjustmentRecommendation(
-                    agent_id=agent_id,
-                    recommendation_type="performance_optimization",
-                    description="High latency detected. Consider caching or model optimization.",
-                    confidence=0.8,
-                    suggested_changes={
-                        "action": "enable_caching",
-                        "current_latency_ms": latency_agg.mean_value,
-                        "target_latency_ms": self.config.latency_warning_ms * 0.8,
-                    },
-                    expected_improvement=0.3,
-                ))
+                recommendations.append(
+                    AdjustmentRecommendation(
+                        agent_id=agent_id,
+                        recommendation_type="performance_optimization",
+                        description="High latency detected. Consider caching or model optimization.",
+                        confidence=0.8,
+                        suggested_changes={
+                            "action": "enable_caching",
+                            "current_latency_ms": latency_agg.mean_value,
+                            "target_latency_ms": self.config.latency_warning_ms * 0.8,
+                        },
+                        expected_improvement=0.3,
+                    )
+                )
 
         # Check error rate
         error_agg = await self.aggregator.aggregate(
@@ -1131,18 +1152,20 @@ class AdjustmentTrigger:
 
         if error_agg.count >= self.config.min_samples_for_adjustment:
             if error_agg.mean_value > self.config.error_rate_warning:
-                recommendations.append(AdjustmentRecommendation(
-                    agent_id=agent_id,
-                    recommendation_type="error_reduction",
-                    description="High error rate detected. Review error patterns and add retry logic.",
-                    confidence=0.9,
-                    suggested_changes={
-                        "action": "increase_retries",
-                        "current_error_rate": error_agg.mean_value,
-                        "suggested_max_retries": 5,
-                    },
-                    expected_improvement=0.2,
-                ))
+                recommendations.append(
+                    AdjustmentRecommendation(
+                        agent_id=agent_id,
+                        recommendation_type="error_reduction",
+                        description="High error rate detected. Review error patterns and add retry logic.",
+                        confidence=0.9,
+                        suggested_changes={
+                            "action": "increase_retries",
+                            "current_error_rate": error_agg.mean_value,
+                            "suggested_max_retries": 5,
+                        },
+                        expected_improvement=0.2,
+                    )
+                )
 
         return recommendations
 
@@ -1150,6 +1173,7 @@ class AdjustmentTrigger:
 # =============================================================================
 # Strategy Metrics (Main Interface)
 # =============================================================================
+
 
 class StrategyMetrics:
     """
@@ -1169,7 +1193,7 @@ class StrategyMetrics:
         >>> report = await metrics.get_agent_report("summarizer")
     """
 
-    def __init__(self, config: Optional[StrategyMetricsConfig] = None):
+    def __init__(self, config: StrategyMetricsConfig | None = None):
         """
         Initialize strategy metrics.
 
@@ -1197,12 +1221,12 @@ class StrategyMetrics:
         agent_id: str,
         success: bool,
         latency_ms: float,
-        score: Optional[float] = None,
-        error: Optional[str] = None,
+        score: float | None = None,
+        error: str | None = None,
         timeout: bool = False,
-        tenant_id: Optional[str] = None,
-        correlation_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        tenant_id: str | None = None,
+        correlation_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> Reward:
         """
         Record an agent outcome.
@@ -1250,24 +1274,28 @@ class StrategyMetrics:
         ]
 
         if error:
-            data_points.append(MetricDataPoint(
-                metric_type=MetricType.ERROR_RATE,
-                value=1.0,
-                timestamp=timestamp,
-                agent_id=agent_id,
-                tenant_id=tenant_id,
-                correlation_id=correlation_id,
-            ))
+            data_points.append(
+                MetricDataPoint(
+                    metric_type=MetricType.ERROR_RATE,
+                    value=1.0,
+                    timestamp=timestamp,
+                    agent_id=agent_id,
+                    tenant_id=tenant_id,
+                    correlation_id=correlation_id,
+                )
+            )
 
         if score is not None:
-            data_points.append(MetricDataPoint(
-                metric_type=MetricType.USER_SATISFACTION,
-                value=score,
-                timestamp=timestamp,
-                agent_id=agent_id,
-                tenant_id=tenant_id,
-                correlation_id=correlation_id,
-            ))
+            data_points.append(
+                MetricDataPoint(
+                    metric_type=MetricType.USER_SATISFACTION,
+                    value=score,
+                    timestamp=timestamp,
+                    agent_id=agent_id,
+                    tenant_id=tenant_id,
+                    correlation_id=correlation_id,
+                )
+            )
 
         await self.collector.record_batch(data_points)
 
@@ -1288,9 +1316,7 @@ class StrategyMetrics:
             agent_id, MetricType.SUCCESS_RATE, TimeWindow.FIVE_MINUTES
         )
         if agg.count >= 10:
-            self.alert_manager.check_thresholds(
-                agent_id, MetricType.SUCCESS_RATE, agg.mean_value
-            )
+            self.alert_manager.check_thresholds(agent_id, MetricType.SUCCESS_RATE, agg.mean_value)
 
         return reward
 
@@ -1298,7 +1324,7 @@ class StrategyMetrics:
         self,
         agent_id: str,
         window: TimeWindow = TimeWindow.HOUR,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """
         Get comprehensive report for an agent.
 
@@ -1328,9 +1354,7 @@ class StrategyMetrics:
         trends = {}
         for metric_type in [MetricType.SUCCESS_RATE, MetricType.LATENCY_MEAN]:
             try:
-                trend = await self.trend_analyzer.analyze_trend(
-                    agent_id, metric_type, window
-                )
+                trend = await self.trend_analyzer.analyze_trend(agent_id, metric_type, window)
                 if trend.direction != TrendDirection.UNKNOWN:
                     trends[metric_type.value] = trend.to_dict()
             except Exception:
@@ -1364,12 +1388,10 @@ class StrategyMetrics:
             "recommendations": recommendations,
         }
 
-    async def get_system_summary(self) -> Dict[str, Any]:
+    async def get_system_summary(self) -> dict[str, Any]:
         """Get summary of overall system metrics."""
         success_rate = (
-            self._successful_outcomes / self._total_outcomes
-            if self._total_outcomes > 0
-            else 0.0
+            self._successful_outcomes / self._total_outcomes if self._total_outcomes > 0 else 0.0
         )
 
         return {
@@ -1382,7 +1404,7 @@ class StrategyMetrics:
             ),
         }
 
-    def get_statistics(self) -> Dict[str, Any]:
+    def get_statistics(self) -> dict[str, Any]:
         """Get current statistics."""
         return {
             "total_outcomes_recorded": self._total_outcomes,
@@ -1398,6 +1420,7 @@ class StrategyMetrics:
 # =============================================================================
 # Factory Functions
 # =============================================================================
+
 
 def create_strategy_metrics(
     success_rate_warning: float = 0.9,
@@ -1433,11 +1456,11 @@ def create_strategy_metrics(
 # Singleton for Global Access
 # =============================================================================
 
-_global_metrics: Optional[StrategyMetrics] = None
+_global_metrics: StrategyMetrics | None = None
 
 
 def get_strategy_metrics(
-    config: Optional[StrategyMetricsConfig] = None,
+    config: StrategyMetricsConfig | None = None,
 ) -> StrategyMetrics:
     """
     Get or create global StrategyMetrics instance.

@@ -29,30 +29,26 @@ Adapted from patterns in:
 
 import asyncio
 import logging
-import json
 import time
 import uuid
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Tuple, Union
+from typing import Any
 
 from framework.agents.base_agent import (
-    BaseAgent,
     AgentConfig,
     AgentContext,
-    AgentTask,
     AgentResponse,
+    AgentTask,
+    BaseAgent,
     TaskStatus,
-    LLMProvider,
 )
-
 from framework.tools.tool_registry import (
-    ToolRegistry,
-    ToolResult,
     ToolExecutionStatus,
+    ToolRegistry,
     ToolSecurityLevel,
-    TenantPolicy,
     get_tool_registry,
 )
 
@@ -61,6 +57,7 @@ logger = logging.getLogger(__name__)
 
 class ExecutionStrategy(Enum):
     """Strategy for executing plan steps"""
+
     SEQUENTIAL = "sequential"  # Execute steps one after another
     PARALLEL = "parallel"  # Execute independent steps in parallel
     ADAPTIVE = "adaptive"  # Dynamically choose based on dependencies
@@ -68,6 +65,7 @@ class ExecutionStrategy(Enum):
 
 class StepStatus(Enum):
     """Status of an individual step execution"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -79,6 +77,7 @@ class StepStatus(Enum):
 
 class ErrorRecoveryStrategy(Enum):
     """Strategy for handling step failures"""
+
     FAIL_FAST = "fail_fast"  # Stop execution on first failure
     CONTINUE = "continue"  # Continue with next steps
     RETRY = "retry"  # Retry failed step
@@ -89,6 +88,7 @@ class ErrorRecoveryStrategy(Enum):
 @dataclass
 class StepExecution:
     """Record of a single step execution"""
+
     step_id: str
     step_number: int
     action: str
@@ -96,36 +96,36 @@ class StepExecution:
 
     # Execution details
     tool_name: str
-    parameters: Dict[str, Any]
+    parameters: dict[str, Any]
 
     # Status and timing
     status: StepStatus = StepStatus.PENDING
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
     execution_time_ms: float = 0.0
 
     # Results
     output: Any = None
-    error: Optional[str] = None
-    error_type: Optional[str] = None
+    error: str | None = None
+    error_type: str | None = None
 
     # Retries
     attempt_count: int = 0
     max_attempts: int = 3
 
     # Dependencies
-    depends_on: List[str] = field(default_factory=list)
-    blocks: List[str] = field(default_factory=list)
+    depends_on: list[str] = field(default_factory=list)
+    blocks: list[str] = field(default_factory=list)
 
     # Context
-    input_variables: Dict[str, Any] = field(default_factory=dict)
-    output_variables: Dict[str, Any] = field(default_factory=dict)
+    input_variables: dict[str, Any] = field(default_factory=dict)
+    output_variables: dict[str, Any] = field(default_factory=dict)
 
     # Security
-    security_warnings: List[str] = field(default_factory=list)
+    security_warnings: list[str] = field(default_factory=list)
     was_sandboxed: bool = False
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "step_id": self.step_id,
             "step_number": self.step_number,
@@ -149,6 +149,7 @@ class StepExecution:
 @dataclass
 class ExecutionResult:
     """Result of executing a complete plan"""
+
     plan_id: str
     success: bool
     status: str
@@ -159,26 +160,26 @@ class ExecutionResult:
     steps_skipped: int
     total_steps: int
 
-    step_executions: List[StepExecution]
+    step_executions: list[StepExecution]
 
     # Aggregate metrics
     total_execution_time_ms: float = 0.0
-    tools_used: List[str] = field(default_factory=list)
+    tools_used: list[str] = field(default_factory=list)
 
     # Outputs
     final_output: Any = None
-    output_variables: Dict[str, Any] = field(default_factory=dict)
+    output_variables: dict[str, Any] = field(default_factory=dict)
 
     # Errors
-    errors: List[Dict[str, Any]] = field(default_factory=list)
+    errors: list[dict[str, Any]] = field(default_factory=list)
     requires_replan: bool = False
-    replan_reason: Optional[str] = None
+    replan_reason: str | None = None
 
     # Timestamps
     started_at: datetime = field(default_factory=datetime.now)
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "plan_id": self.plan_id,
             "success": self.success,
@@ -203,6 +204,7 @@ class ExecutionResult:
 @dataclass
 class ExecutorConfig:
     """Configuration specific to the ExecutorAgent"""
+
     # Execution settings
     execution_strategy: ExecutionStrategy = ExecutionStrategy.SEQUENTIAL
     max_parallel_steps: int = 5
@@ -270,13 +272,13 @@ class ExecutorAgent(BaseAgent):
         self,
         agent_name: str = "executor_agent",
         agent_type: str = "executor",
-        config: Optional[AgentConfig] = None,
-        executor_config: Optional[ExecutorConfig] = None,
-        tool_registry: Optional[ToolRegistry] = None,
+        config: AgentConfig | None = None,
+        executor_config: ExecutorConfig | None = None,
+        tool_registry: ToolRegistry | None = None,
         llm_client=None,
         brain_logger=None,
         security_scanner=None,
-        default_context: Optional[AgentContext] = None,
+        default_context: AgentContext | None = None,
     ):
         """
         Initialize the ExecutorAgent.
@@ -306,15 +308,15 @@ class ExecutorAgent(BaseAgent):
         self.tool_registry = tool_registry or get_tool_registry()
 
         # Execution state
-        self._active_executions: Dict[str, ExecutionResult] = {}
-        self._execution_history: List[ExecutionResult] = []
+        self._active_executions: dict[str, ExecutionResult] = {}
+        self._execution_history: list[ExecutionResult] = []
 
         # Variable context for step chaining
-        self._variable_context: Dict[str, Any] = {}
+        self._variable_context: dict[str, Any] = {}
 
         # Callbacks
-        self._step_callbacks: List[Callable[[StepExecution], None]] = []
-        self._completion_callbacks: List[Callable[[ExecutionResult], None]] = []
+        self._step_callbacks: list[Callable[[StepExecution], None]] = []
+        self._completion_callbacks: list[Callable[[ExecutionResult], None]] = []
 
         # Statistics
         self.execution_stats = {
@@ -327,9 +329,11 @@ class ExecutorAgent(BaseAgent):
             "tools_usage": {},
         }
 
-        logger.info(f"ExecutorAgent '{agent_name}' initialized with {len(self.tool_registry._tools)} tools available")
+        logger.info(
+            f"ExecutorAgent '{agent_name}' initialized with {len(self.tool_registry._tools)} tools available"
+        )
 
-    def _initialize_capabilities(self) -> List[str]:
+    def _initialize_capabilities(self) -> list[str]:
         """Define executor-specific capabilities"""
         return [
             "plan-execution",
@@ -360,7 +364,7 @@ Log any unexpected behaviors or security concerns.
         self,
         raw_response: str,
         task: AgentTask,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Process response from execution task"""
         return {
             "text": raw_response,
@@ -388,9 +392,9 @@ Log any unexpected behaviors or security concerns.
 
     async def execute_plan(
         self,
-        plan: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
-        tenant_id: Optional[str] = None,
+        plan: dict[str, Any],
+        context: dict[str, Any] | None = None,
+        tenant_id: str | None = None,
     ) -> ExecutionResult:
         """
         Execute a plan generated by PlannerAgent.
@@ -422,13 +426,14 @@ Log any unexpected behaviors or security concerns.
         # Initialize execution context
         execution_context = {
             "plan_id": plan_id,
-            "tenant_id": tenant_id or (self.default_context.tenant_id if self.default_context else None),
+            "tenant_id": tenant_id
+            or (self.default_context.tenant_id if self.default_context else None),
             "variables": {},
             **(context or {}),
         }
 
         # Track execution
-        run_id: Optional[str] = None
+        run_id: str | None = None
         start_time = time.time()
 
         # Start Brain logging
@@ -450,11 +455,15 @@ Log any unexpected behaviors or security concerns.
             except Exception as e:
                 logger.warning(f"Failed to start Brain logging: {e}")
 
-        self._log_event("plan_execution_started", {
-            "plan_id": plan_id,
-            "total_steps": len(steps),
-            "execution_strategy": self.executor_config.execution_strategy.value,
-        }, run_id)
+        self._log_event(
+            "plan_execution_started",
+            {
+                "plan_id": plan_id,
+                "total_steps": len(steps),
+                "execution_strategy": self.executor_config.execution_strategy.value,
+            },
+            run_id,
+        )
 
         # Convert plan steps to step executions
         step_executions = self._prepare_step_executions(steps, plan_id)
@@ -497,10 +506,9 @@ Log any unexpected behaviors or security concerns.
             result.completed_at = datetime.now()
             result.total_execution_time_ms = (time.time() - start_time) * 1000
             result.output_variables = execution_context.get("variables", {})
-            result.tools_used = list(set(
-                s.tool_name for s in result.step_executions
-                if s.status == StepStatus.COMPLETED
-            ))
+            result.tools_used = list(
+                set(s.tool_name for s in result.step_executions if s.status == StepStatus.COMPLETED)
+            )
 
             # Determine overall success
             result.success = result.steps_failed == 0 and result.steps_completed > 0
@@ -517,13 +525,17 @@ Log any unexpected behaviors or security concerns.
             self._update_execution_stats(result)
 
             # Log completion
-            self._log_event("plan_execution_completed", {
-                "plan_id": plan_id,
-                "success": result.success,
-                "steps_completed": result.steps_completed,
-                "steps_failed": result.steps_failed,
-                "execution_time_ms": result.total_execution_time_ms,
-            }, run_id)
+            self._log_event(
+                "plan_execution_completed",
+                {
+                    "plan_id": plan_id,
+                    "success": result.success,
+                    "steps_completed": result.steps_completed,
+                    "steps_failed": result.steps_failed,
+                    "execution_time_ms": result.total_execution_time_ms,
+                },
+                run_id,
+            )
 
             # Complete Brain logging
             if self._brain_logger and run_id:
@@ -533,7 +545,9 @@ Log any unexpected behaviors or security concerns.
                     output_data={
                         "steps_completed": result.steps_completed,
                         "steps_failed": result.steps_failed,
-                        "final_output_preview": str(result.final_output)[:500] if result.final_output else None,
+                        "final_output_preview": str(result.final_output)[:500]
+                        if result.final_output
+                        else None,
                     },
                     tokens_used=0,
                 )
@@ -553,9 +567,9 @@ Log any unexpected behaviors or security concerns.
 
     def _prepare_step_executions(
         self,
-        steps: List[Dict[str, Any]],
+        steps: list[dict[str, Any]],
         plan_id: str,
-    ) -> List[StepExecution]:
+    ) -> list[StepExecution]:
         """Convert plan steps to step execution objects"""
         step_executions = []
 
@@ -585,7 +599,7 @@ Log any unexpected behaviors or security concerns.
 
         return step_executions
 
-    def _parse_step_action(self, step: Dict[str, Any]) -> Tuple[str, Dict[str, Any]]:
+    def _parse_step_action(self, step: dict[str, Any]) -> tuple[str, dict[str, Any]]:
         """Parse a step to extract tool name and parameters"""
         # Check for explicit tool specification
         if "tool" in step:
@@ -627,7 +641,9 @@ Log any unexpected behaviors or security concerns.
         parameters = {}
 
         if tool_name == "shell":
-            parameters["command"] = step.get("command", step.get("parameters", {}).get("command", ""))
+            parameters["command"] = step.get(
+                "command", step.get("parameters", {}).get("command", "")
+            )
             if not parameters["command"]:
                 # Try to construct from description
                 parameters["command"] = step.get("description", "echo 'No command specified'")
@@ -662,8 +678,8 @@ Log any unexpected behaviors or security concerns.
     async def _execute_sequential(
         self,
         result: ExecutionResult,
-        context: Dict[str, Any],
-        run_id: Optional[str],
+        context: dict[str, Any],
+        run_id: str | None,
     ):
         """Execute steps sequentially"""
         for step in result.step_executions:
@@ -698,12 +714,14 @@ Log any unexpected behaviors or security concerns.
                 result.steps_completed += 1
             elif step.status == StepStatus.FAILED:
                 result.steps_failed += 1
-                result.errors.append({
-                    "step_id": step.step_id,
-                    "step_number": step.step_number,
-                    "error": step.error,
-                    "error_type": step.error_type,
-                })
+                result.errors.append(
+                    {
+                        "step_id": step.step_id,
+                        "step_number": step.step_number,
+                        "error": step.error,
+                        "error_type": step.error_type,
+                    }
+                )
 
                 # Check recovery strategy
                 if self.executor_config.error_recovery == ErrorRecoveryStrategy.FAIL_FAST:
@@ -723,8 +741,8 @@ Log any unexpected behaviors or security concerns.
     async def _execute_parallel(
         self,
         result: ExecutionResult,
-        context: Dict[str, Any],
-        run_id: Optional[str],
+        context: dict[str, Any],
+        run_id: str | None,
     ):
         """Execute independent steps in parallel"""
         # Group steps by dependency level
@@ -747,20 +765,25 @@ Log any unexpected behaviors or security concerns.
                     result.steps_completed += 1
                 elif step.status == StepStatus.FAILED:
                     result.steps_failed += 1
-                    result.errors.append({
-                        "step_id": step.step_id,
-                        "error": step.error,
-                    })
+                    result.errors.append(
+                        {
+                            "step_id": step.step_id,
+                            "error": step.error,
+                        }
+                    )
 
             # Check for failures
-            if result.steps_failed > 0 and self.executor_config.error_recovery == ErrorRecoveryStrategy.FAIL_FAST:
+            if (
+                result.steps_failed > 0
+                and self.executor_config.error_recovery == ErrorRecoveryStrategy.FAIL_FAST
+            ):
                 break
 
     async def _execute_adaptive(
         self,
         result: ExecutionResult,
-        context: Dict[str, Any],
-        run_id: Optional[str],
+        context: dict[str, Any],
+        run_id: str | None,
     ):
         """Execute with adaptive strategy based on dependencies"""
         # Start with sequential but parallelize when possible
@@ -768,8 +791,8 @@ Log any unexpected behaviors or security concerns.
 
     def _build_dependency_levels(
         self,
-        steps: List[StepExecution],
-    ) -> List[List[StepExecution]]:
+        steps: list[StepExecution],
+    ) -> list[list[StepExecution]]:
         """Build levels of steps that can be executed in parallel"""
         levels = []
         remaining = list(steps)
@@ -798,8 +821,8 @@ Log any unexpected behaviors or security concerns.
     async def _execute_step(
         self,
         step: StepExecution,
-        context: Dict[str, Any],
-        run_id: Optional[str],
+        context: dict[str, Any],
+        run_id: str | None,
     ):
         """Execute a single step"""
         step.status = StepStatus.IN_PROGRESS
@@ -807,18 +830,23 @@ Log any unexpected behaviors or security concerns.
         start_time = time.time()
 
         # Log step start
-        self._log_event("step_started", {
-            "step_id": step.step_id,
-            "step_number": step.step_number,
-            "tool": step.tool_name,
-            "action": step.action,
-        }, run_id)
+        self._log_event(
+            "step_started",
+            {
+                "step_id": step.step_id,
+                "step_number": step.step_number,
+                "tool": step.tool_name,
+                "action": step.action,
+            },
+            run_id,
+        )
 
         # Substitute variables in parameters
         if self.executor_config.enable_variable_substitution:
             step.parameters = self._substitute_variables(step.parameters, context)
             step.input_variables = {
-                k: v for k, v in context.get("variables", {}).items()
+                k: v
+                for k, v in context.get("variables", {}).items()
                 if str(v) in str(step.parameters)
             }
 
@@ -872,7 +900,7 @@ Log any unexpected behaviors or security concerns.
                 if step.attempt_count < step.max_attempts:
                     if self.executor_config.error_recovery in [
                         ErrorRecoveryStrategy.RETRY,
-                        ErrorRecoveryStrategy.FALLBACK
+                        ErrorRecoveryStrategy.FALLBACK,
                     ]:
                         step.status = StepStatus.RETRYING
                         await asyncio.sleep(
@@ -898,14 +926,18 @@ Log any unexpected behaviors or security concerns.
         step.execution_time_ms = (time.time() - start_time) * 1000
 
         # Log step completion
-        self._log_event("step_completed", {
-            "step_id": step.step_id,
-            "step_number": step.step_number,
-            "status": step.status.value,
-            "execution_time_ms": step.execution_time_ms,
-            "attempts": step.attempt_count,
-            "error": step.error,
-        }, run_id)
+        self._log_event(
+            "step_completed",
+            {
+                "step_id": step.step_id,
+                "step_number": step.step_number,
+                "status": step.status.value,
+                "execution_time_ms": step.execution_time_ms,
+                "attempts": step.attempt_count,
+                "error": step.error,
+            },
+            run_id,
+        )
 
         # Notify callbacks
         for callback in self._step_callbacks:
@@ -916,9 +948,9 @@ Log any unexpected behaviors or security concerns.
 
     def _substitute_variables(
         self,
-        parameters: Dict[str, Any],
-        context: Dict[str, Any],
-    ) -> Dict[str, Any]:
+        parameters: dict[str, Any],
+        context: dict[str, Any],
+    ) -> dict[str, Any]:
         """Substitute variables in parameters"""
         variables = context.get("variables", {})
         prefix = self.executor_config.variable_prefix
@@ -958,8 +990,8 @@ Log any unexpected behaviors or security concerns.
         n = self.execution_stats["total_executions"]
         old_avg = self.execution_stats["avg_execution_time_ms"]
         self.execution_stats["avg_execution_time_ms"] = (
-            (old_avg * (n - 1) + result.total_execution_time_ms) / n
-        )
+            old_avg * (n - 1) + result.total_execution_time_ms
+        ) / n
 
         # Track tool usage
         for tool in result.tools_used:
@@ -1001,9 +1033,9 @@ Log any unexpected behaviors or security concerns.
 
     def create_execution_task(
         self,
-        plan: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
-        tenant_id: Optional[str] = None,
+        plan: dict[str, Any],
+        context: dict[str, Any] | None = None,
+        tenant_id: str | None = None,
     ) -> AgentTask:
         """
         Create an execution task from a plan.
@@ -1029,8 +1061,8 @@ Log any unexpected behaviors or security concerns.
 
     def get_available_tools(
         self,
-        tenant_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        tenant_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Get list of available tools for execution"""
         tools = self.tool_registry.list_tools(
             security_level=self.executor_config.max_security_level,
@@ -1038,7 +1070,7 @@ Log any unexpected behaviors or security concerns.
         )
         return [t.to_dict() for t in tools]
 
-    def get_execution_stats(self) -> Dict[str, Any]:
+    def get_execution_stats(self) -> dict[str, Any]:
         """Get execution statistics"""
         return {
             **self.execution_stats,
@@ -1046,32 +1078,32 @@ Log any unexpected behaviors or security concerns.
             "available_tools": len(self.tool_registry._tools),
         }
 
-    def get_capabilities(self) -> Dict[str, Any]:
+    def get_capabilities(self) -> dict[str, Any]:
         """Get agent capabilities including executor-specific info"""
         base_capabilities = super().get_capabilities()
-        base_capabilities.update({
-            "executor_config": {
-                "execution_strategy": self.executor_config.execution_strategy.value,
-                "error_recovery": self.executor_config.error_recovery.value,
-                "max_retries": self.executor_config.max_retries_per_step,
-                "max_security_level": self.executor_config.max_security_level.value,
-            },
-            "execution_stats": self.get_execution_stats(),
-            "available_tools": [
-                t.name for t in self.tool_registry.list_tools()
-            ],
-        })
+        base_capabilities.update(
+            {
+                "executor_config": {
+                    "execution_strategy": self.executor_config.execution_strategy.value,
+                    "error_recovery": self.executor_config.error_recovery.value,
+                    "max_retries": self.executor_config.max_retries_per_step,
+                    "max_security_level": self.executor_config.max_security_level.value,
+                },
+                "execution_stats": self.get_execution_stats(),
+                "available_tools": [t.name for t in self.tool_registry.list_tools()],
+            }
+        )
         return base_capabilities
 
 
 # Convenience factory function
 def create_executor_agent(
-    tool_registry: Optional[ToolRegistry] = None,
+    tool_registry: ToolRegistry | None = None,
     brain_logger=None,
     execution_strategy: ExecutionStrategy = ExecutionStrategy.SEQUENTIAL,
     error_recovery: ErrorRecoveryStrategy = ErrorRecoveryStrategy.RETRY,
     max_security_level: ToolSecurityLevel = ToolSecurityLevel.ELEVATED,
-    tenant_id: Optional[str] = None,
+    tenant_id: str | None = None,
 ) -> ExecutorAgent:
     """
     Create a configured ExecutorAgent.

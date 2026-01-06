@@ -19,7 +19,8 @@ import time
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any
+
 import numpy as np
 
 logger = logging.getLogger(__name__)
@@ -29,8 +30,10 @@ logger = logging.getLogger(__name__)
 # Enums and Configuration
 # =============================================================================
 
+
 class VectorBackend(Enum):
     """Supported vector search backends."""
+
     PGVECTOR = "pgvector"
     CHROMADB = "chromadb"
     IN_MEMORY = "in_memory"
@@ -39,6 +42,7 @@ class VectorBackend(Enum):
 
 class DistanceMetric(Enum):
     """Distance metrics for similarity computation."""
+
     COSINE = "cosine"
     EUCLIDEAN = "euclidean"
     DOT_PRODUCT = "dot_product"
@@ -47,6 +51,7 @@ class DistanceMetric(Enum):
 
 class EmbeddingModel(Enum):
     """Supported embedding models."""
+
     MINILM_L6 = "all-MiniLM-L6-v2"  # 384 dimensions, fast
     MPNET_BASE = "all-mpnet-base-v2"  # 768 dimensions, better quality
     BGE_SMALL = "BAAI/bge-small-en-v1.5"  # 384 dimensions, good quality
@@ -75,7 +80,7 @@ class VectorSearchConfig:
 
     # Backend settings
     backend: VectorBackend = VectorBackend.PGVECTOR
-    fallback_backends: List[VectorBackend] = field(
+    fallback_backends: list[VectorBackend] = field(
         default_factory=lambda: [VectorBackend.CHROMADB, VectorBackend.IN_MEMORY]
     )
 
@@ -92,12 +97,12 @@ class VectorSearchResult:
     id: str
     content: str
     score: float
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    embedding: Optional[List[float]] = None
-    source: Optional[str] = None
-    chunk_index: Optional[int] = None
+    metadata: dict[str, Any] = field(default_factory=dict)
+    embedding: list[float] | None = None
+    source: str | None = None
+    chunk_index: int | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "id": self.id,
@@ -114,26 +119,26 @@ class SearchFilter:
     """Filter criteria for vector search."""
 
     # Metadata filters
-    metadata_match: Dict[str, Any] = field(default_factory=dict)
-    metadata_contains: Dict[str, str] = field(default_factory=dict)
+    metadata_match: dict[str, Any] = field(default_factory=dict)
+    metadata_contains: dict[str, str] = field(default_factory=dict)
 
     # Source filters
-    sources: Optional[List[str]] = None
-    exclude_sources: Optional[List[str]] = None
+    sources: list[str] | None = None
+    exclude_sources: list[str] | None = None
 
     # Content filters
-    content_contains: Optional[str] = None
-    min_content_length: Optional[int] = None
-    max_content_length: Optional[int] = None
+    content_contains: str | None = None
+    min_content_length: int | None = None
+    max_content_length: int | None = None
 
     # Tenant isolation
-    tenant_id: Optional[str] = None
+    tenant_id: str | None = None
 
     # Time-based filters
-    created_after: Optional[float] = None
-    created_before: Optional[float] = None
+    created_after: float | None = None
+    created_before: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary for serialization."""
         result = {}
         if self.metadata_match:
@@ -155,6 +160,7 @@ class SearchFilter:
 # Embedding Cache
 # =============================================================================
 
+
 class EmbeddingCache:
     """LRU cache for embeddings with TTL support."""
 
@@ -165,8 +171,8 @@ class EmbeddingCache:
     ):
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
-        self._cache: Dict[str, Tuple[List[float], float]] = {}
-        self._access_order: List[str] = []
+        self._cache: dict[str, tuple[list[float], float]] = {}
+        self._access_order: list[str] = []
         self._lock = asyncio.Lock()
 
     def _compute_key(self, text: str, model: str) -> str:
@@ -178,7 +184,7 @@ class EmbeddingCache:
         self,
         text: str,
         model: str,
-    ) -> Optional[List[float]]:
+    ) -> list[float] | None:
         """Get cached embedding if available and not expired."""
         key = self._compute_key(text, model)
 
@@ -206,7 +212,7 @@ class EmbeddingCache:
         self,
         text: str,
         model: str,
-        embedding: List[float],
+        embedding: list[float],
     ) -> None:
         """Cache an embedding."""
         key = self._compute_key(text, model)
@@ -226,7 +232,7 @@ class EmbeddingCache:
             self._cache.clear()
             self._access_order.clear()
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         return {
             "size": len(self._cache),
@@ -239,20 +245,25 @@ class EmbeddingCache:
 # Embedding Service
 # =============================================================================
 
+
 class EmbeddingService:
     """Service for generating text embeddings."""
 
     def __init__(
         self,
-        config: Optional[VectorSearchConfig] = None,
+        config: VectorSearchConfig | None = None,
     ):
         self.config = config or VectorSearchConfig()
         self._model = None
         self._model_name = self.config.model_name
-        self._cache = EmbeddingCache(
-            max_size=self.config.max_cache_size,
-            ttl_seconds=self.config.cache_ttl_seconds,
-        ) if self.config.enable_cache else None
+        self._cache = (
+            EmbeddingCache(
+                max_size=self.config.max_cache_size,
+                ttl_seconds=self.config.cache_ttl_seconds,
+            )
+            if self.config.enable_cache
+            else None
+        )
         self._lock = asyncio.Lock()
 
     async def _ensure_model(self) -> None:
@@ -269,7 +280,9 @@ class EmbeddingService:
 
                 logger.info(f"Loading embedding model: {self._model_name}")
                 self._model = SentenceTransformer(self._model_name)
-                logger.info(f"Loaded embedding model with dimension: {self._model.get_sentence_embedding_dimension()}")
+                logger.info(
+                    f"Loaded embedding model with dimension: {self._model.get_sentence_embedding_dimension()}"
+                )
 
             except ImportError:
                 logger.warning("sentence-transformers not available, using fallback")
@@ -282,7 +295,7 @@ class EmbeddingService:
         self,
         text: str,
         use_cache: bool = True,
-    ) -> List[float]:
+    ) -> list[float]:
         """
         Generate embedding for a single text.
 
@@ -308,7 +321,7 @@ class EmbeddingService:
 
         return embedding
 
-    async def _generate_embedding(self, text: str) -> List[float]:
+    async def _generate_embedding(self, text: str) -> list[float]:
         """Generate embedding using the model."""
         await self._ensure_model()
 
@@ -325,7 +338,7 @@ class EmbeddingService:
                     text,
                     normalize_embeddings=self.config.normalize_embeddings,
                     show_progress_bar=False,
-                )
+                ),
             )
             return embedding.tolist()
 
@@ -333,7 +346,7 @@ class EmbeddingService:
             logger.error(f"Embedding generation failed: {e}")
             return self._fallback_embedding(text)
 
-    def _fallback_embedding(self, text: str) -> List[float]:
+    def _fallback_embedding(self, text: str) -> list[float]:
         """Generate a deterministic fallback embedding."""
         # Use hash-based deterministic embedding
         hash_bytes = hashlib.sha256(text.encode()).digest()
@@ -355,10 +368,10 @@ class EmbeddingService:
 
     async def batch_embed(
         self,
-        texts: List[str],
+        texts: list[str],
         use_cache: bool = True,
         show_progress: bool = False,
-    ) -> List[List[float]]:
+    ) -> list[list[float]]:
         """
         Generate embeddings for multiple texts efficiently.
 
@@ -373,8 +386,8 @@ class EmbeddingService:
         if not texts:
             return []
 
-        results: List[Optional[List[float]]] = [None] * len(texts)
-        texts_to_embed: List[Tuple[int, str]] = []
+        results: list[list[float] | None] = [None] * len(texts)
+        texts_to_embed: list[tuple[int, str]] = []
 
         # Check cache for each text
         if use_cache and self._cache:
@@ -403,7 +416,7 @@ class EmbeddingService:
                         normalize_embeddings=self.config.normalize_embeddings,
                         show_progress_bar=show_progress,
                         batch_size=self.config.batch_size,
-                    )
+                    ),
                 )
 
                 for (idx, text), embedding in zip(texts_to_embed, embeddings):
@@ -421,7 +434,7 @@ class EmbeddingService:
 
         return [r for r in results if r is not None]
 
-    def cache_stats(self) -> Optional[Dict[str, Any]]:
+    def cache_stats(self) -> dict[str, Any] | None:
         """Get cache statistics."""
         return self._cache.stats() if self._cache else None
 
@@ -430,7 +443,8 @@ class EmbeddingService:
 # Similarity Functions
 # =============================================================================
 
-def cosine_similarity(a: List[float], b: List[float]) -> float:
+
+def cosine_similarity(a: list[float], b: list[float]) -> float:
     """Compute cosine similarity between two vectors."""
     a_arr = np.array(a)
     b_arr = np.array(b)
@@ -445,19 +459,19 @@ def cosine_similarity(a: List[float], b: List[float]) -> float:
     return float(dot / (norm_a * norm_b))
 
 
-def euclidean_distance(a: List[float], b: List[float]) -> float:
+def euclidean_distance(a: list[float], b: list[float]) -> float:
     """Compute Euclidean distance between two vectors."""
     a_arr = np.array(a)
     b_arr = np.array(b)
     return float(np.linalg.norm(a_arr - b_arr))
 
 
-def dot_product(a: List[float], b: List[float]) -> float:
+def dot_product(a: list[float], b: list[float]) -> float:
     """Compute dot product of two vectors."""
     return float(np.dot(a, b))
 
 
-def manhattan_distance(a: List[float], b: List[float]) -> float:
+def manhattan_distance(a: list[float], b: list[float]) -> float:
     """Compute Manhattan distance between two vectors."""
     a_arr = np.array(a)
     b_arr = np.array(b)
@@ -465,8 +479,8 @@ def manhattan_distance(a: List[float], b: List[float]) -> float:
 
 
 def compute_similarity(
-    a: List[float],
-    b: List[float],
+    a: list[float],
+    b: list[float],
     metric: DistanceMetric = DistanceMetric.COSINE,
 ) -> float:
     """
@@ -493,6 +507,7 @@ def compute_similarity(
 # Vector Index Interface
 # =============================================================================
 
+
 class VectorIndex(ABC):
     """Abstract base class for vector indices."""
 
@@ -500,9 +515,9 @@ class VectorIndex(ABC):
     async def add(
         self,
         id: str,
-        embedding: List[float],
+        embedding: list[float],
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Add a vector to the index."""
         pass
@@ -510,10 +525,10 @@ class VectorIndex(ABC):
     @abstractmethod
     async def search(
         self,
-        query_vector: List[float],
+        query_vector: list[float],
         top_k: int = 10,
-        filters: Optional[SearchFilter] = None,
-    ) -> List[VectorSearchResult]:
+        filters: SearchFilter | None = None,
+    ) -> list[VectorSearchResult]:
         """Search for similar vectors."""
         pass
 
@@ -536,15 +551,15 @@ class InMemoryVectorIndex(VectorIndex):
         metric: DistanceMetric = DistanceMetric.COSINE,
     ):
         self.metric = metric
-        self._vectors: Dict[str, Tuple[List[float], str, Dict[str, Any]]] = {}
+        self._vectors: dict[str, tuple[list[float], str, dict[str, Any]]] = {}
         self._lock = asyncio.Lock()
 
     async def add(
         self,
         id: str,
-        embedding: List[float],
+        embedding: list[float],
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Add a vector to the index."""
         async with self._lock:
@@ -552,7 +567,7 @@ class InMemoryVectorIndex(VectorIndex):
 
     async def add_batch(
         self,
-        items: List[Tuple[str, List[float], str, Dict[str, Any]]],
+        items: list[tuple[str, list[float], str, dict[str, Any]]],
     ) -> None:
         """Add multiple vectors to the index."""
         async with self._lock:
@@ -561,12 +576,12 @@ class InMemoryVectorIndex(VectorIndex):
 
     async def search(
         self,
-        query_vector: List[float],
+        query_vector: list[float],
         top_k: int = 10,
-        filters: Optional[SearchFilter] = None,
-    ) -> List[VectorSearchResult]:
+        filters: SearchFilter | None = None,
+    ) -> list[VectorSearchResult]:
         """Search for similar vectors."""
-        results: List[VectorSearchResult] = []
+        results: list[VectorSearchResult] = []
 
         async with self._lock:
             for id, (embedding, content, metadata) in self._vectors.items():
@@ -577,14 +592,16 @@ class InMemoryVectorIndex(VectorIndex):
 
                 score = compute_similarity(query_vector, embedding, self.metric)
 
-                results.append(VectorSearchResult(
-                    id=id,
-                    content=content,
-                    score=score,
-                    metadata=metadata,
-                    source=metadata.get("source"),
-                    chunk_index=metadata.get("chunk_index"),
-                ))
+                results.append(
+                    VectorSearchResult(
+                        id=id,
+                        content=content,
+                        score=score,
+                        metadata=metadata,
+                        source=metadata.get("source"),
+                        chunk_index=metadata.get("chunk_index"),
+                    )
+                )
 
         # Sort by score descending and return top_k
         results.sort(key=lambda x: x.score, reverse=True)
@@ -593,7 +610,7 @@ class InMemoryVectorIndex(VectorIndex):
     def _matches_filter(
         self,
         content: str,
-        metadata: Dict[str, Any],
+        metadata: dict[str, Any],
         filters: SearchFilter,
     ) -> bool:
         """Check if a document matches the filter criteria."""
@@ -658,12 +675,13 @@ class InMemoryVectorIndex(VectorIndex):
 # PgVector Index Adapter
 # =============================================================================
 
+
 class PgVectorIndex(VectorIndex):
     """Vector index using pgvector (PostgreSQL)."""
 
     def __init__(
         self,
-        connection_string: Optional[str] = None,
+        connection_string: str | None = None,
         table_name: str = "embeddings",
         dimension: int = 384,
     ):
@@ -693,9 +711,9 @@ class PgVectorIndex(VectorIndex):
     async def add(
         self,
         id: str,
-        embedding: List[float],
+        embedding: list[float],
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Add a vector to the index."""
         await self._ensure_pool()
@@ -722,10 +740,10 @@ class PgVectorIndex(VectorIndex):
 
     async def search(
         self,
-        query_vector: List[float],
+        query_vector: list[float],
         top_k: int = 10,
-        filters: Optional[SearchFilter] = None,
-    ) -> List[VectorSearchResult]:
+        filters: SearchFilter | None = None,
+    ) -> list[VectorSearchResult]:
         """Search for similar vectors using cosine distance."""
         await self._ensure_pool()
 
@@ -766,14 +784,16 @@ class PgVectorIndex(VectorIndex):
 
             for row in rows:
                 metadata = json.loads(row["metadata"]) if row["metadata"] else {}
-                results.append(VectorSearchResult(
-                    id=row["id"],
-                    content=row["content"],
-                    score=float(row["similarity"]),
-                    metadata=metadata,
-                    source=metadata.get("source"),
-                    chunk_index=metadata.get("chunk_index"),
-                ))
+                results.append(
+                    VectorSearchResult(
+                        id=row["id"],
+                        content=row["content"],
+                        score=float(row["similarity"]),
+                        metadata=metadata,
+                        source=metadata.get("source"),
+                        chunk_index=metadata.get("chunk_index"),
+                    )
+                )
 
         return results
 
@@ -802,13 +822,14 @@ class PgVectorIndex(VectorIndex):
 # ChromaDB Index Adapter
 # =============================================================================
 
+
 class ChromaDBIndex(VectorIndex):
     """Vector index using ChromaDB."""
 
     def __init__(
         self,
         collection_name: str = "documents",
-        persist_directory: Optional[str] = None,
+        persist_directory: str | None = None,
     ):
         self.collection_name = collection_name
         self.persist_directory = persist_directory
@@ -830,9 +851,7 @@ class ChromaDBIndex(VectorIndex):
                     settings=Settings(anonymized_telemetry=False),
                 )
             else:
-                self._client = chromadb.Client(
-                    Settings(anonymized_telemetry=False)
-                )
+                self._client = chromadb.Client(Settings(anonymized_telemetry=False))
 
             self._collection = self._client.get_or_create_collection(
                 name=self.collection_name,
@@ -847,9 +866,9 @@ class ChromaDBIndex(VectorIndex):
     async def add(
         self,
         id: str,
-        embedding: List[float],
+        embedding: list[float],
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Add a vector to the index."""
         await self._ensure_collection()
@@ -864,7 +883,7 @@ class ChromaDBIndex(VectorIndex):
             metadatas=[flat_metadata],
         )
 
-    def _flatten_metadata(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
+    def _flatten_metadata(self, metadata: dict[str, Any]) -> dict[str, Any]:
         """Flatten nested metadata for ChromaDB compatibility."""
         flat = {}
         for key, value in metadata.items():
@@ -880,10 +899,10 @@ class ChromaDBIndex(VectorIndex):
 
     async def search(
         self,
-        query_vector: List[float],
+        query_vector: list[float],
         top_k: int = 10,
-        filters: Optional[SearchFilter] = None,
-    ) -> List[VectorSearchResult]:
+        filters: SearchFilter | None = None,
+    ) -> list[VectorSearchResult]:
         """Search for similar vectors."""
         await self._ensure_collection()
 
@@ -910,14 +929,16 @@ class ChromaDBIndex(VectorIndex):
                 metadata = results["metadatas"][0][i] if results["metadatas"] else {}
                 content = results["documents"][0][i] if results["documents"] else ""
 
-                search_results.append(VectorSearchResult(
-                    id=id,
-                    content=content,
-                    score=similarity,
-                    metadata=metadata,
-                    source=metadata.get("source"),
-                    chunk_index=metadata.get("chunk_index"),
-                ))
+                search_results.append(
+                    VectorSearchResult(
+                        id=id,
+                        content=content,
+                        score=similarity,
+                        metadata=metadata,
+                        source=metadata.get("source"),
+                        chunk_index=metadata.get("chunk_index"),
+                    )
+                )
 
         return search_results
 
@@ -941,13 +962,14 @@ class ChromaDBIndex(VectorIndex):
 # Unified Query Function
 # =============================================================================
 
+
 async def query_vector_index(
-    query_vector: List[float],
+    query_vector: list[float],
     index: VectorIndex,
     top_k: int = 10,
-    filters: Optional[SearchFilter] = None,
+    filters: SearchFilter | None = None,
     min_similarity: float = 0.0,
-) -> List[VectorSearchResult]:
+) -> list[VectorSearchResult]:
     """
     Query a vector index with filtering and minimum similarity threshold.
 
@@ -977,11 +999,11 @@ async def query_vector_index(
 async def hybrid_search(
     query: str,
     embedding_service: EmbeddingService,
-    indices: List[VectorIndex],
+    indices: list[VectorIndex],
     top_k: int = 10,
-    filters: Optional[SearchFilter] = None,
+    filters: SearchFilter | None = None,
     merge_strategy: str = "interleave",
-) -> List[VectorSearchResult]:
+) -> list[VectorSearchResult]:
     """
     Perform hybrid search across multiple indices.
 
@@ -1000,15 +1022,12 @@ async def hybrid_search(
     query_vector = await embedding_service.embed_text(query)
 
     # Search all indices concurrently
-    search_tasks = [
-        query_vector_index(query_vector, index, top_k, filters)
-        for index in indices
-    ]
+    search_tasks = [query_vector_index(query_vector, index, top_k, filters) for index in indices]
 
     all_results = await asyncio.gather(*search_tasks, return_exceptions=True)
 
     # Flatten results
-    merged: List[VectorSearchResult] = []
+    merged: list[VectorSearchResult] = []
     for results in all_results:
         if isinstance(results, Exception):
             logger.error(f"Index search failed: {results}")
@@ -1016,7 +1035,7 @@ async def hybrid_search(
         merged.extend(results)
 
     # Deduplicate by ID, keeping highest score
-    seen: Dict[str, VectorSearchResult] = {}
+    seen: dict[str, VectorSearchResult] = {}
     for result in merged:
         if result.id not in seen or result.score > seen[result.id].score:
             seen[result.id] = result
@@ -1032,10 +1051,10 @@ async def hybrid_search(
 # =============================================================================
 
 # Global embedding service instance
-_embedding_service: Optional[EmbeddingService] = None
+_embedding_service: EmbeddingService | None = None
 
 
-def get_embedding_service(config: Optional[VectorSearchConfig] = None) -> EmbeddingService:
+def get_embedding_service(config: VectorSearchConfig | None = None) -> EmbeddingService:
     """Get or create the global embedding service."""
     global _embedding_service
 
@@ -1047,8 +1066,8 @@ def get_embedding_service(config: Optional[VectorSearchConfig] = None) -> Embedd
 
 async def embed_text(
     text: str,
-    config: Optional[VectorSearchConfig] = None,
-) -> List[float]:
+    config: VectorSearchConfig | None = None,
+) -> list[float]:
     """
     Convenience function to embed text using the global service.
 
@@ -1064,9 +1083,9 @@ async def embed_text(
 
 
 async def batch_embed_texts(
-    texts: List[str],
-    config: Optional[VectorSearchConfig] = None,
-) -> List[List[float]]:
+    texts: list[str],
+    config: VectorSearchConfig | None = None,
+) -> list[list[float]]:
     """
     Convenience function to batch embed texts using the global service.
 
@@ -1103,7 +1122,7 @@ def create_pgvector_index(
 
 def create_chromadb_index(
     collection_name: str = "documents",
-    persist_directory: Optional[str] = None,
+    persist_directory: str | None = None,
 ) -> ChromaDBIndex:
     """Create a ChromaDB index."""
     return ChromaDBIndex(

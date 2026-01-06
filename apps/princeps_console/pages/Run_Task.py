@@ -1,8 +1,8 @@
-import streamlit as st
-import json
 import asyncio
-from lib.workspace import get_active_workspace, get_active_workspace_details
+
+import streamlit as st
 from lib.dispatcher import run_task_async
+from lib.workspace import get_active_workspace, get_active_workspace_details
 
 st.set_page_config(page_title="Run Task", page_icon="🚀", layout="wide")
 
@@ -18,7 +18,9 @@ st.caption(f"Executing in Workspace: **{ws_details.name}** ({ws_id})")
 
 # --- Input Form ---
 with st.form("run_task_form"):
-    task_prompt = st.text_area("Task Prompt", height=150, help="Describe what you want the agent to do.")
+    task_prompt = st.text_area(
+        "Task Prompt", height=150, help="Describe what you want the agent to do."
+    )
 
     workflow_options = ["default", "plan_and_execute", "create_plan"]
     workflow_select = st.selectbox("Workflow", options=workflow_options, index=0)
@@ -38,7 +40,9 @@ if submitted:
                     result = asyncio.run(run_task_async(task_prompt, workflow_select, ws_id))
 
                     if result.success:
-                        st.success(f"Task Completed Successfully! (Duration: {result.duration_ms:.2f}ms)")
+                        st.success(
+                            f"Task Completed Successfully! (Duration: {result.duration_ms:.2f}ms)"
+                        )
 
                         st.subheader("Output")
 
@@ -58,7 +62,9 @@ if submitted:
                             st.write(output_data)
 
                         st.caption(f"Run ID: `{result.task_id}`")
-                        st.link_button("View Logs", f"/Runs_Logs") # Basic link, Streamlit routing is tricky without query params
+                        st.link_button(
+                            "View Logs", "/Runs_Logs"
+                        )  # Basic link, Streamlit routing is tricky without query params
 
                     else:
                         st.error("Task Failed")

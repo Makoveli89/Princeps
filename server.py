@@ -1,36 +1,37 @@
-import os
-from dotenv import load_dotenv
-load_dotenv()  # Load .env file
-import uuid
 import datetime
-import asyncio
-from typing import List, Optional, Dict, Any
+import uuid
 from contextlib import asynccontextmanager
+from typing import Any
 
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks
+from dotenv import load_dotenv
+from fastapi import Depends, FastAPI, HTTPException, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 
 # Princeps Imports
-from brain.core.db import get_engine, init_db, get_session
-from brain.core.models import Tenant, AgentRun, Document, KnowledgeNode, Resource
-from framework.agents.base_agent import BaseAgent, AgentConfig, AgentTask, LLMProvider
+from brain.core.db import get_engine, get_session, init_db
+from brain.core.models import AgentRun, KnowledgeNode, Tenant
 from framework.agents.example_agent import SummarizationAgent
+
+# Configuration
+from framework.config import settings
 from framework.llms.multi_llm_client import MultiLLMClient
+from framework.skills.registry import get_registry
 
 # Skills
 from framework.skills.resolver import SkillResolver
-from framework.skills.registry import get_registry
-# Import library to register skills
-import framework.skills.library.code_review
-import framework.skills.library.research
+
+load_dotenv()  # Load .env file
 
 # Initialize Database on Startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     # Check/Init Database
     try:
+        # We might want to pass settings.DATABASE_URL if get_engine supported it,
+        # but for now we assume get_engine reads env vars or we set env var via settings.
         engine = get_engine()
         # In a real scenario, we might want to be careful about running init_db
         # unconditionally, but for "easy set up" it's helpful.
@@ -43,18 +44,36 @@ async def lifespan(app: FastAPI):
     yield
     # Cleanup if needed
 
-app = FastAPI(title="Princeps Console Backend", version="0.1.0", lifespan=lifespan)
+
+app = FastAPI(title=settings.APP_NAME, version=settings.APP_VERSION, lifespan=lifespan)
+
+
+# Global Exception Handler
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    error_id = str(uuid.uuid4())
+    print(f"ERROR {error_id}: {exc}")  # Log the full error
+    return JSONResponse(
+        status_code=500,
+        content={
+            "detail": "Internal Server Error",
+            "error_id": error_id,
+            "message": "An unexpected error occurred. Please contact support with the error ID.",
+        },
+    )
+
 
 # Enable CORS for local development
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["http://localhost:5173"],
+    allow_origins=settings.ALLOWED_ORIGINS,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
 # --- Types ---
+
 
 class WorkspaceDTO(BaseModel):
     id: str
@@ -64,25 +83,30 @@ class WorkspaceDTO(BaseModel):
     agentCount: int
     lastActive: str
 
+
 class CreateWorkspaceRequest(BaseModel):
     name: str
     description: str
+
 
 class AgentDTO(BaseModel):
     id: str
     name: str
     role: str
     status: str
-    capabilities: List[str]
+    capabilities: list[str]
+
 
 class RunRequest(BaseModel):
-    agentId: str # For now this maps to a hardcoded agent type or ID
+    agentId: str  # For now this maps to a hardcoded agent type or ID
     input: str
     workspaceId: str
+
 
 class SkillRunRequest(BaseModel):
     query: str
     workspaceId: str
+
 
 class StatsDTO(BaseModel):
     activeAgents: int
@@ -90,10 +114,12 @@ class StatsDTO(BaseModel):
     uptime: str
     knowledgeNodes: int
 
+
 # --- Helper: Dependency for DB Session ---
 def get_db():
     with get_session() as session:
         yield session
+
 
 # --- Helper: Fake Agent Manager ---
 # In a real app, this would be a sophisticated service managing running instances.
@@ -109,19 +135,19 @@ class AgentManager:
         self.llm_client = MultiLLMClient()
         self.skill_resolver = SkillResolver(llm_client=self.llm_client)
 
-    def get_agents(self) -> List[AgentDTO]:
+    def get_agents(self) -> list[AgentDTO]:
         return [
             AgentDTO(
                 id=a.agent_id,
                 name=a.agent_name,
                 role=a.agent_type.capitalize(),
                 status="idle",
-                capabilities=a.get_capabilities()["capabilities"]
+                capabilities=a.get_capabilities()["capabilities"],
             )
             for a in self.available_agents
         ]
 
-    async def run_agent(self, agent_id: str, prompt: str, workspace_id: str) -> Dict[str, Any]:
+    async def run_agent(self, agent_id: str, prompt: str, workspace_id: str) -> dict[str, Any]:
         # Find agent by ID or Type
         # Ideally we persist agents in DB, but for now we look up in our list
         # or create a new transient one.
@@ -133,16 +159,13 @@ class AgentManager:
         # Configure the agent with the real client
         agent_def.llm_client = self.llm_client
 
-        task = agent_def.create_task(
-            prompt=prompt,
-            tenant_id=workspace_id
-        )
+        task = agent_def.create_task(prompt=prompt, tenant_id=workspace_id)
 
         # We need to run this asynchronously
         response = await agent_def.execute_task(task)
         return response.to_dict()
 
-    async def run_skill(self, query: str, workspace_id: str) -> Dict[str, Any]:
+    async def run_skill(self, query: str, workspace_id: str) -> dict[str, Any]:
         """
         Resolve and execute a skill based on natural language query.
         """
@@ -152,15 +175,15 @@ class AgentManager:
             return {
                 "status": "failed",
                 "message": "Could not identify a skill for your request.",
-                "query": query
+                "query": query,
             }
 
         skill_cls = get_registry().get_skill(skill_name)
         if not skill_cls:
-             return {
+            return {
                 "status": "failed",
                 "message": f"Skill '{skill_name}' was resolved but not found in registry.",
-                "query": query
+                "query": query,
             }
 
         # Instantiate and execute
@@ -172,23 +195,21 @@ class AgentManager:
                 "status": "success",
                 "skill_name": skill_name,
                 "parameters": params,
-                "result": result
+                "result": result,
             }
         except Exception as e:
-            return {
-                "status": "error",
-                "message": str(e),
-                "skill_name": skill_name
-            }
+            return {"status": "error", "message": str(e), "skill_name": skill_name}
 
 
 agent_manager = AgentManager()
 
 # --- Endpoints ---
 
+
 @app.get("/api/health")
 def health_check():
     return {"status": "ok", "service": "princeps-console-backend"}
+
 
 @app.get("/api/stats", response_model=StatsDTO)
 def get_stats(db=Depends(get_db)):
@@ -196,7 +217,7 @@ def get_stats(db=Depends(get_db)):
     node_count = db.query(KnowledgeNode).count()
     # "Tasks completed" could be approximated by AgentRun counts or similar
     # Since AgentRun is not yet populated by this simple console, we might see 0.
-    task_count = db.query(AgentRun).filter(AgentRun.success == True).count()
+    task_count = db.query(AgentRun).filter(AgentRun.success).count()
 
     # Active agents: approximate by unique agents in recent runs or just hardcode based on "available"
     # For now, let's use available agents count
@@ -205,29 +226,35 @@ def get_stats(db=Depends(get_db)):
     return StatsDTO(
         activeAgents=active_agents,
         tasksCompleted=task_count,
-        uptime="99.9%", # Hardcoded for now
-        knowledgeNodes=node_count
+        uptime="99.9%",  # Hardcoded for now
+        knowledgeNodes=node_count,
     )
 
-@app.get("/api/workspaces", response_model=List[WorkspaceDTO])
+
+@app.get("/api/workspaces", response_model=list[WorkspaceDTO])
 def get_workspaces(db=Depends(get_db)):
-    tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
+    tenants = db.query(Tenant).filter(Tenant.is_active).all()
 
     result = []
     for t in tenants:
         # Approximate agent count per tenant (e.g. from runs)
         # agent_count = db.query(AgentRun.agent_id).filter(AgentRun.tenant_id == t.id).distinct().count()
-        agent_count = 0 # Optimization: skip complex query for list view
+        agent_count = 0  # Optimization: skip complex query for list view
 
-        result.append(WorkspaceDTO(
-            id=str(t.id),
-            name=t.name,
-            description=t.description,
-            status="active" if t.is_active else "archived",
-            agentCount=agent_count,
-            lastActive=t.updated_at.isoformat() if t.updated_at else datetime.datetime.utcnow().isoformat()
-        ))
+        result.append(
+            WorkspaceDTO(
+                id=str(t.id),
+                name=t.name,
+                description=t.description,
+                status="active" if t.is_active else "archived",
+                agentCount=agent_count,
+                lastActive=t.updated_at.isoformat()
+                if t.updated_at
+                else datetime.datetime.utcnow().isoformat(),
+            )
+        )
     return result
+
 
 @app.post("/api/workspaces", response_model=WorkspaceDTO)
 def create_workspace(req: CreateWorkspaceRequest, db=Depends(get_db)):
@@ -236,11 +263,7 @@ def create_workspace(req: CreateWorkspaceRequest, db=Depends(get_db)):
     if existing:
         raise HTTPException(status_code=400, detail="Workspace name already exists")
 
-    new_tenant = Tenant(
-        name=req.name,
-        description=req.description,
-        is_active=True
-    )
+    new_tenant = Tenant(name=req.name, description=req.description, is_active=True)
     db.add(new_tenant)
     db.commit()
     db.refresh(new_tenant)
@@ -251,12 +274,14 @@ def create_workspace(req: CreateWorkspaceRequest, db=Depends(get_db)):
         description=new_tenant.description,
         status="active",
         agentCount=0,
-        lastActive=new_tenant.created_at.isoformat()
+        lastActive=new_tenant.created_at.isoformat(),
     )
 
-@app.get("/api/agents", response_model=List[AgentDTO])
+
+@app.get("/api/agents", response_model=list[AgentDTO])
 def get_agents():
     return agent_manager.get_agents()
+
 
 @app.post("/api/run")
 async def run_agent(request: RunRequest):
@@ -272,11 +297,12 @@ async def run_agent(request: RunRequest):
             "status": "success",
             "run_id": result.get("task_id"),
             "output": result.get("response_text", ""),
-            "full_result": result
+            "full_result": result,
         }
     except Exception as e:
         print(f"Agent run failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
+
 
 @app.post("/api/skills/execute")
 async def execute_skill(request: SkillRunRequest):
@@ -290,6 +316,6 @@ async def execute_skill(request: SkillRunRequest):
         print(f"Skill execution failed: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
+
 if __name__ == "__main__":
     uvicorn.run("server:app", host="0.0.0.0", port=8000, reload=True)
-

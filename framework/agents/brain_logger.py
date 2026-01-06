@@ -19,19 +19,19 @@ The logger uses the SupabaseClient from brain_layer for database operations,
 falling back to local logging if database is unavailable.
 """
 
-import logging
 import json
+import logging
 import uuid
+from collections.abc import Callable
+from dataclasses import dataclass
 from datetime import datetime
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Union
-from dataclasses import dataclass, field
+from typing import Any
 
 # Local imports
 from framework.agents.schemas.agent_run import (
-    AgentRunCreate,
-    AgentRunUpdate,
     AgentRunRecord,
+    AgentRunUpdate,
     ModelUsageRecord,
     PIIScanResult,
     RunStatus,
@@ -50,7 +50,7 @@ class LoggerConfig:
 
     # Fallback file logging
     enable_file_logging: bool = True
-    log_file_path: Optional[str] = None
+    log_file_path: str | None = None
     log_dir: str = "logs/agent_runs"
 
     # What to log
@@ -103,7 +103,7 @@ class BrainLogger:
     def __init__(
         self,
         supabase_client=None,
-        config: Optional[LoggerConfig] = None,
+        config: LoggerConfig | None = None,
     ):
         """
         Initialize the BrainLogger.
@@ -117,13 +117,13 @@ class BrainLogger:
         self._db_available = False
 
         # In-memory cache for active runs
-        self._active_runs: Dict[str, AgentRunRecord] = {}
+        self._active_runs: dict[str, AgentRunRecord] = {}
 
         # Event buffer for batching
-        self._event_buffer: List[Dict[str, Any]] = []
+        self._event_buffer: list[dict[str, Any]] = []
 
         # Callbacks for external integrations
-        self._callbacks: List[Callable[[Dict[str, Any]], None]] = []
+        self._callbacks: list[Callable[[dict[str, Any]], None]] = []
 
         # Initialize database connection
         self._init_database()
@@ -144,9 +144,8 @@ class BrainLogger:
         if self._supabase is None:
             # Try to create client from environment
             try:
-                from brain_layer.supabase_pgvector.supabase_client import (
-                    create_supabase_client
-                )
+                from brain_layer.supabase_pgvector.supabase_client import create_supabase_client
+
                 self._supabase = create_supabase_client()
                 self._db_available = True
                 logger.info("Database connection established")
@@ -157,11 +156,11 @@ class BrainLogger:
         else:
             self._db_available = True
 
-    def add_callback(self, callback: Callable[[Dict[str, Any]], None]):
+    def add_callback(self, callback: Callable[[dict[str, Any]], None]):
         """Add a callback for log events"""
         self._callbacks.append(callback)
 
-    def _notify_callbacks(self, event: Dict[str, Any]):
+    def _notify_callbacks(self, event: dict[str, Any]):
         """Notify all registered callbacks"""
         for callback in self._callbacks:
             try:
@@ -174,10 +173,10 @@ class BrainLogger:
         agent_id: str,
         agent_name: str,
         agent_type: str,
-        tenant_id: Optional[str] = None,
-        task_id: Optional[str] = None,
-        input_data: Optional[Dict[str, Any]] = None,
-        context: Optional[Dict[str, Any]] = None,
+        tenant_id: str | None = None,
+        task_id: str | None = None,
+        input_data: dict[str, Any] | None = None,
+        context: dict[str, Any] | None = None,
     ) -> str:
         """
         Start a new agent run and create a record.
@@ -216,33 +215,34 @@ class BrainLogger:
         # Persist to database
         if self._db_available:
             try:
-                self._supabase.insert(
-                    self.config.db_table_name,
-                    run_record.to_db_dict()
-                )
+                self._supabase.insert(self.config.db_table_name, run_record.to_db_dict())
             except Exception as e:
                 logger.error(f"Failed to insert run record: {e}")
                 self._log_to_file(run_record.to_db_dict())
 
         # Log to file as backup
         if self.config.enable_file_logging:
-            self._log_to_file({
-                "event": "run_started",
-                "run_id": run_id,
-                "agent_id": agent_id,
-                "agent_name": agent_name,
-                "agent_type": agent_type,
-                "tenant_id": tenant_id,
-                "timestamp": datetime.utcnow().isoformat(),
-            })
+            self._log_to_file(
+                {
+                    "event": "run_started",
+                    "run_id": run_id,
+                    "agent_id": agent_id,
+                    "agent_name": agent_name,
+                    "agent_type": agent_type,
+                    "tenant_id": tenant_id,
+                    "timestamp": datetime.utcnow().isoformat(),
+                }
+            )
 
         # Notify callbacks
-        self._notify_callbacks({
-            "event_type": "run_started",
-            "run_id": run_id,
-            "agent_id": agent_id,
-            "timestamp": datetime.utcnow().isoformat(),
-        })
+        self._notify_callbacks(
+            {
+                "event_type": "run_started",
+                "run_id": run_id,
+                "agent_id": agent_id,
+                "timestamp": datetime.utcnow().isoformat(),
+            }
+        )
 
         logger.info(f"Started run {run_id} for agent {agent_name}")
         return run_id
@@ -251,7 +251,7 @@ class BrainLogger:
         self,
         run_id: str,
         event_type: str,
-        data: Dict[str, Any],
+        data: dict[str, Any],
     ):
         """
         Log an event during a run.
@@ -298,7 +298,7 @@ class BrainLogger:
         success: bool = True,
         is_fallback: bool = False,
         attempt_number: int = 1,
-        error: Optional[str] = None,
+        error: str | None = None,
     ):
         """
         Log LLM model usage for a run.
@@ -346,8 +346,8 @@ class BrainLogger:
         run_id: str,
         has_pii: bool = False,
         has_secrets: bool = False,
-        pii_types: Optional[List[str]] = None,
-        secret_types: Optional[List[str]] = None,
+        pii_types: list[str] | None = None,
+        secret_types: list[str] | None = None,
         content_redacted: bool = False,
     ):
         """
@@ -384,11 +384,11 @@ class BrainLogger:
         self,
         run_id: str,
         success: bool,
-        output_data: Optional[Dict[str, Any]] = None,
-        error: Optional[str] = None,
-        error_type: Optional[str] = None,
+        output_data: dict[str, Any] | None = None,
+        error: str | None = None,
+        error_type: str | None = None,
         tokens_used: int = 0,
-        model_used: Optional[str] = None,
+        model_used: str | None = None,
         fallback_used: bool = False,
         retry_count: int = 0,
     ):
@@ -442,7 +442,7 @@ class BrainLogger:
                     self._supabase.update(
                         self.config.db_table_name,
                         update_data.dict(exclude_none=True),
-                        {"id": run_id}
+                        {"id": run_id},
                     )
                 except Exception as e:
                     logger.error(f"Failed to update run record: {e}")
@@ -450,27 +450,31 @@ class BrainLogger:
 
             # Log to file
             if self.config.enable_file_logging:
-                self._log_to_file({
-                    "event": "run_completed",
-                    "run_id": run_id,
-                    "success": success,
-                    "tokens_used": tokens_used,
-                    "model_used": model_used,
-                    "fallback_used": fallback_used,
-                    "error": error,
-                    "timestamp": completed_at.isoformat(),
-                })
+                self._log_to_file(
+                    {
+                        "event": "run_completed",
+                        "run_id": run_id,
+                        "success": success,
+                        "tokens_used": tokens_used,
+                        "model_used": model_used,
+                        "fallback_used": fallback_used,
+                        "error": error,
+                        "timestamp": completed_at.isoformat(),
+                    }
+                )
 
             # Clean up active runs
             del self._active_runs[run_id]
 
         # Notify callbacks
-        self._notify_callbacks({
-            "event_type": "run_completed",
-            "run_id": run_id,
-            "success": success,
-            "timestamp": completed_at.isoformat(),
-        })
+        self._notify_callbacks(
+            {
+                "event_type": "run_completed",
+                "run_id": run_id,
+                "success": success,
+                "timestamp": completed_at.isoformat(),
+            }
+        )
 
         logger.info(f"Completed run {run_id}: success={success}")
 
@@ -512,7 +516,7 @@ class BrainLogger:
                     self._supabase.update(
                         self.config.db_table_name,
                         {"status": "cancelled", "completed_at": datetime.utcnow().isoformat()},
-                        {"id": run_id}
+                        {"id": run_id},
                     )
                 except Exception as e:
                     logger.error(f"Failed to cancel run: {e}")
@@ -520,7 +524,7 @@ class BrainLogger:
             del self._active_runs[run_id]
             logger.info(f"Cancelled run {run_id}")
 
-    def get_run(self, run_id: str) -> Optional[AgentRunRecord]:
+    def get_run(self, run_id: str) -> AgentRunRecord | None:
         """
         Get a run record by ID.
 
@@ -537,10 +541,7 @@ class BrainLogger:
         # Query database
         if self._db_available:
             try:
-                row = self._supabase.select_by_id(
-                    self.config.db_table_name,
-                    run_id
-                )
+                row = self._supabase.select_by_id(self.config.db_table_name, run_id)
                 if row:
                     return AgentRunRecord.from_db_row(row)
             except Exception as e:
@@ -550,12 +551,12 @@ class BrainLogger:
 
     def get_runs(
         self,
-        agent_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
-        status: Optional[RunStatus] = None,
+        agent_id: str | None = None,
+        tenant_id: str | None = None,
+        status: RunStatus | None = None,
         limit: int = 100,
         offset: int = 0,
-    ) -> List[AgentRunRecord]:
+    ) -> list[AgentRunRecord]:
         """
         Query run records with filters.
 
@@ -595,7 +596,7 @@ class BrainLogger:
             logger.error(f"Failed to query runs: {e}")
             return []
 
-    def _log_to_file(self, data: Dict[str, Any]):
+    def _log_to_file(self, data: dict[str, Any]):
         """Log data to file as fallback/backup"""
         if not self.config.enable_file_logging:
             return
@@ -611,15 +612,15 @@ class BrainLogger:
         except Exception as e:
             logger.error(f"Failed to write to log file: {e}")
 
-    def get_active_runs(self) -> Dict[str, AgentRunRecord]:
+    def get_active_runs(self) -> dict[str, AgentRunRecord]:
         """Get all currently active runs"""
         return self._active_runs.copy()
 
     def get_stats(
         self,
-        agent_id: Optional[str] = None,
-        tenant_id: Optional[str] = None,
-    ) -> Dict[str, Any]:
+        agent_id: str | None = None,
+        tenant_id: str | None = None,
+    ) -> dict[str, Any]:
         """
         Get statistics for runs.
 
@@ -674,7 +675,7 @@ class BrainLogger:
 
 
 # Singleton instance for shared use
-_default_logger: Optional[BrainLogger] = None
+_default_logger: BrainLogger | None = None
 
 
 def get_brain_logger() -> BrainLogger:

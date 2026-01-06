@@ -1,10 +1,12 @@
 """Tenant Isolation - Multi-tenant data isolation."""
+
 from contextlib import contextmanager
 from uuid import UUID
 
 
 class TenantContext:
     """Context for tenant-scoped operations."""
+
     _current_tenant: str | None = None
 
     @classmethod
@@ -19,6 +21,7 @@ class TenantContext:
     def clear(cls):
         cls._current_tenant = None
 
+
 @contextmanager
 def TenantIsolation(tenant_id: str):
     """Context manager for tenant isolation."""
@@ -32,12 +35,14 @@ def TenantIsolation(tenant_id: str):
         else:
             TenantContext.clear()
 
+
 def ensure_tenant_access(session, tenant_id: str | UUID, resource_tenant_id: str | UUID) -> bool:
     """Ensure the current tenant has access to a resource."""
     return str(tenant_id) == str(resource_tenant_id)
 
+
 def get_tenant_filter(model, tenant_id: str | UUID):
     """Get SQLAlchemy filter for tenant isolation."""
-    if hasattr(model, 'tenant_id'):
+    if hasattr(model, "tenant_id"):
         return model.tenant_id == tenant_id
     return True

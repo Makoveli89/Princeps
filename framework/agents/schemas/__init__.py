@@ -5,12 +5,12 @@ These models ensure data matches the Postgres database schema exactly.
 """
 
 from framework.agents.schemas.agent_run import (
-    RunStatus,
     AgentRunCreate,
-    AgentRunUpdate,
     AgentRunRecord,
+    AgentRunUpdate,
     ModelUsageRecord,
     PIIScanResult,
+    RunStatus,
 )
 
 __all__ = [

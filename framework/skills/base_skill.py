@@ -14,9 +14,10 @@ Design inspired by 'claude-flow' Skills System.
 """
 
 from abc import ABC, abstractmethod
-from typing import Any, Dict, List, Optional
-from dataclasses import dataclass, field
-from pydantic import BaseModel, Field
+from typing import Any
+
+from pydantic import BaseModel
+
 
 class SkillParameter(BaseModel):
     name: str
@@ -25,12 +26,13 @@ class SkillParameter(BaseModel):
     required: bool = True
     default: Any = None
 
+
 class BaseSkill(ABC):
     """
     Abstract base class for a Skill.
     """
 
-    def __init__(self, context: Optional[Dict[str, Any]] = None):
+    def __init__(self, context: dict[str, Any] | None = None):
         self.context = context or {}
 
     @property
@@ -47,7 +49,7 @@ class BaseSkill(ABC):
 
     @property
     @abstractmethod
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         """
         JSON Schema defining the parameters this skill accepts.
         Used by the Resolver to extract arguments from user input.
@@ -55,7 +57,7 @@ class BaseSkill(ABC):
         pass
 
     @abstractmethod
-    async def execute(self, **kwargs) -> Dict[str, Any]:
+    async def execute(self, **kwargs) -> dict[str, Any]:
         """
         Execute the skill with the provided arguments.
 

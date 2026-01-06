@@ -1,9 +1,8 @@
 import streamlit as st
+from lib.db import safe_query
 from lib.workspace import get_active_workspace, get_active_workspace_details
-from lib.db import safe_query, get_db_session
+
 from brain.core.db import similarity_search_chunks
-from brain.core.models import DocChunk
-from framework.agents.retriever_agent import RetrieverAgent
 
 st.set_page_config(page_title="Knowledge Search", page_icon="🔍", layout="wide")
 
@@ -51,6 +50,7 @@ if query:
             # I need to use `EmbeddingService` to embed the query.
 
             from brain.ingestion.ingest_service import EmbeddingService
+
             embedder = EmbeddingService()
 
             if embedder.is_available:
@@ -59,17 +59,16 @@ if query:
 
                 def search_op(session):
                     return similarity_search_chunks(
-                        session,
-                        query_vec,
-                        tenant_id=ws_id,
-                        limit=top_k
+                        session, query_vec, tenant_id=ws_id, limit=top_k
                     )
 
                 raw_results = safe_query(search_op)
                 results = raw_results
             else:
                 method_used = "Text Search (Fallback)"
-                st.warning("Embedding service not available. Falling back to simple text match (not implemented).")
+                st.warning(
+                    "Embedding service not available. Falling back to simple text match (not implemented)."
+                )
                 # Could implement ILIKE here if needed
                 results = []
 
@@ -82,7 +81,7 @@ if query:
         for res in results:
             with st.container():
                 st.markdown(f"**Similarity:** `{res['similarity']:.4f}`")
-                st.info(res['content'])
+                st.info(res["content"])
                 st.caption(f"Chunk ID: {res['id']} | Doc ID: {res['document_id']}")
     else:
         st.info("No results found.")

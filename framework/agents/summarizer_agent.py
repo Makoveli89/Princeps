@@ -31,16 +31,15 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from framework.agents.base_agent import (
-    BaseAgent,
-    AgentTask,
-    AgentResponse,
     AgentConfig,
     AgentContext,
+    AgentResponse,
+    AgentTask,
+    BaseAgent,
     TaskStatus,
-    LLMProvider,
 )
 from framework.agents.brain_logger import BrainLogger, get_brain_logger
 from framework.agents.schemas.agent_run import (
@@ -56,8 +55,10 @@ logger = logging.getLogger(__name__)
 # Enums and Configuration
 # =============================================================================
 
+
 class SummarizationModel(Enum):
     """Supported summarization models."""
+
     BART_LARGE_CNN = "facebook/bart-large-cnn"
     DISTILBART_CNN = "sshleifer/distilbart-cnn-12-6"
     T5_BASE = "t5-base"
@@ -68,11 +69,12 @@ class SummarizationModel(Enum):
 
 class SummaryLevel(Enum):
     """Levels of summary detail."""
-    ONE_SENTENCE = "one_sentence"      # ~20-30 words
-    EXECUTIVE = "executive"             # ~50-100 words
-    DETAILED = "detailed"               # ~150-300 words
-    BULLET_POINTS = "bullet_points"     # Key points as list
-    ABSTRACT = "abstract"               # Academic-style abstract
+
+    ONE_SENTENCE = "one_sentence"  # ~20-30 words
+    EXECUTIVE = "executive"  # ~50-100 words
+    DETAILED = "detailed"  # ~150-300 words
+    BULLET_POINTS = "bullet_points"  # Key points as list
+    ABSTRACT = "abstract"  # Academic-style abstract
 
 
 @dataclass
@@ -81,7 +83,7 @@ class SummarizerConfig:
 
     # Model settings
     model: SummarizationModel = SummarizationModel.BART_LARGE_CNN
-    fallback_models: List[SummarizationModel] = field(
+    fallback_models: list[SummarizationModel] = field(
         default_factory=lambda: [
             SummarizationModel.DISTILBART_CNN,
             SummarizationModel.T5_SMALL,
@@ -121,17 +123,17 @@ class SummaryResult:
     """Result from summarization."""
 
     source_id: str  # Document or run ID
-    one_sentence: Optional[str] = None
-    executive: Optional[str] = None
-    detailed: Optional[str] = None
-    bullet_points: Optional[List[str]] = None
-    abstract: Optional[str] = None
+    one_sentence: str | None = None
+    executive: str | None = None
+    detailed: str | None = None
+    bullet_points: list[str] | None = None
+    abstract: str | None = None
     model_used: str = ""
     processing_time_ms: float = 0.0
     input_word_count: int = 0
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "source_id": self.source_id,
@@ -151,6 +153,7 @@ class SummaryResult:
 # Summary Cache
 # =============================================================================
 
+
 class SummaryCache:
     """Cache for computed summaries."""
 
@@ -161,20 +164,20 @@ class SummaryCache:
     ):
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
-        self._cache: Dict[str, Tuple[SummaryResult, float]] = {}
+        self._cache: dict[str, tuple[SummaryResult, float]] = {}
         self._lock = asyncio.Lock()
 
-    def _compute_key(self, content: str, levels: List[SummaryLevel]) -> str:
+    def _compute_key(self, content: str, levels: list[SummaryLevel]) -> str:
         """Compute cache key from content and requested levels."""
-        levels_str = ",".join(sorted(l.value for l in levels))
+        levels_str = ",".join(sorted(lvl.value for lvl in levels))
         key_content = f"{content[:1000]}:{levels_str}"
         return hashlib.sha256(key_content.encode()).hexdigest()
 
     async def get(
         self,
         content: str,
-        levels: List[SummaryLevel],
-    ) -> Optional[SummaryResult]:
+        levels: list[SummaryLevel],
+    ) -> SummaryResult | None:
         """Get cached summary if available."""
         key = self._compute_key(content, levels)
 
@@ -193,7 +196,7 @@ class SummaryCache:
     async def set(
         self,
         content: str,
-        levels: List[SummaryLevel],
+        levels: list[SummaryLevel],
         result: SummaryResult,
     ) -> None:
         """Cache a summary result."""
@@ -217,6 +220,7 @@ class SummaryCache:
 # SummarizerAgent Implementation
 # =============================================================================
 
+
 class SummarizerAgent(BaseAgent):
     """
     Knowledge Distillation Agent for text summarization.
@@ -239,10 +243,10 @@ class SummarizerAgent(BaseAgent):
 
     def __init__(
         self,
-        config: Optional[AgentConfig] = None,
-        summarizer_config: Optional[SummarizerConfig] = None,
-        context: Optional[AgentContext] = None,
-        brain_logger: Optional[BrainLogger] = None,
+        config: AgentConfig | None = None,
+        summarizer_config: SummarizerConfig | None = None,
+        context: AgentContext | None = None,
+        brain_logger: BrainLogger | None = None,
     ):
         super().__init__(config=config, context=context)
 
@@ -250,9 +254,13 @@ class SummarizerAgent(BaseAgent):
         self.brain_logger = brain_logger or get_brain_logger()
 
         # Initialize cache
-        self._cache = SummaryCache(
-            ttl_seconds=self.summarizer_config.cache_ttl_seconds,
-        ) if self.summarizer_config.enable_cache else None
+        self._cache = (
+            SummaryCache(
+                ttl_seconds=self.summarizer_config.cache_ttl_seconds,
+            )
+            if self.summarizer_config.enable_cache
+            else None
+        )
 
         # Lazy-loaded summarization pipeline
         self._pipeline = None
@@ -292,7 +300,7 @@ class SummarizerAgent(BaseAgent):
                         "summarization",
                         model=model.value,
                         token=hf_token,
-                    )
+                    ),
                 )
                 self._pipeline_model = model
 
@@ -313,9 +321,9 @@ class SummarizerAgent(BaseAgent):
     async def summarize(
         self,
         content: str,
-        source_id: Optional[str] = None,
-        levels: Optional[List[SummaryLevel]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        source_id: str | None = None,
+        levels: list[SummaryLevel] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> SummaryResult:
         """
         Generate summaries for the given content.
@@ -414,13 +422,12 @@ class SummarizerAgent(BaseAgent):
         self,
         content: str,
         source_id: str,
-        levels: List[SummaryLevel],
-        metadata: Dict[str, Any],
+        levels: list[SummaryLevel],
+        metadata: dict[str, Any],
     ) -> SummaryResult:
         """Generate summaries using available models."""
         # Try models in priority order
         models_to_try = [self.summarizer_config.model] + self.summarizer_config.fallback_models
-        model_used = None
 
         for model in models_to_try:
             if model == SummarizationModel.LLM:
@@ -454,11 +461,11 @@ class SummarizerAgent(BaseAgent):
         self,
         content: str,
         source_id: str,
-        levels: List[SummaryLevel],
-        metadata: Dict[str, Any],
+        levels: list[SummaryLevel],
+        metadata: dict[str, Any],
         pipeline: Any,
         model: SummarizationModel,
-    ) -> Optional[SummaryResult]:
+    ) -> SummaryResult | None:
         """Generate summaries using transformer pipeline."""
         try:
             result = SummaryResult(
@@ -479,7 +486,7 @@ class SummarizerAgent(BaseAgent):
                         min_length=self.summarizer_config.one_sentence_min_length,
                         do_sample=self.summarizer_config.do_sample,
                         num_beams=self.summarizer_config.num_beams,
-                    )
+                    ),
                 )
                 result.one_sentence = summary[0]["summary_text"]
 
@@ -492,7 +499,7 @@ class SummarizerAgent(BaseAgent):
                         min_length=self.summarizer_config.executive_min_length,
                         do_sample=self.summarizer_config.do_sample,
                         num_beams=self.summarizer_config.num_beams,
-                    )
+                    ),
                 )
                 result.executive = summary[0]["summary_text"]
 
@@ -505,7 +512,7 @@ class SummarizerAgent(BaseAgent):
                         min_length=self.summarizer_config.detailed_min_length,
                         do_sample=self.summarizer_config.do_sample,
                         num_beams=self.summarizer_config.num_beams,
-                    )
+                    ),
                 )
                 result.detailed = summary[0]["summary_text"]
 
@@ -519,9 +526,9 @@ class SummarizerAgent(BaseAgent):
         self,
         content: str,
         source_id: str,
-        levels: List[SummaryLevel],
-        metadata: Dict[str, Any],
-    ) -> Optional[SummaryResult]:
+        levels: list[SummaryLevel],
+        metadata: dict[str, Any],
+    ) -> SummaryResult | None:
         """Generate summaries using LLM."""
         try:
             result = SummaryResult(
@@ -599,10 +606,10 @@ Abstract:"""
 
     async def summarize_batch(
         self,
-        items: List[Tuple[str, str]],  # [(content, source_id), ...]
-        levels: Optional[List[SummaryLevel]] = None,
+        items: list[tuple[str, str]],  # [(content, source_id), ...]
+        levels: list[SummaryLevel] | None = None,
         max_concurrent: int = 5,
-    ) -> List[SummaryResult]:
+    ) -> list[SummaryResult]:
         """
         Summarize multiple documents in parallel.
 
@@ -620,10 +627,7 @@ Abstract:"""
             async with semaphore:
                 return await self.summarize(content, source_id, levels)
 
-        tasks = [
-            process_one(content, source_id)
-            for content, source_id in items
-        ]
+        tasks = [process_one(content, source_id) for content, source_id in items]
 
         return await asyncio.gather(*tasks)
 
@@ -649,18 +653,22 @@ Abstract:"""
 
                 if client:
                     # Insert into document_summaries table
-                    summary_id = hashlib.md5(
-                        f"{source_id}:{time.time()}".encode()
-                    ).hexdigest()
+                    summary_id = hashlib.md5(f"{source_id}:{time.time()}".encode()).hexdigest()
 
-                    await client.table("document_summaries").upsert({
-                        "id": summary_id,
-                        "document_id": source_id,
-                        "one_sentence": result.one_sentence,
-                        "executive": result.executive,
-                        "model_used": result.model_used,
-                        "created_at": datetime.utcnow().isoformat(),
-                    }).execute()
+                    await (
+                        client.table("document_summaries")
+                        .upsert(
+                            {
+                                "id": summary_id,
+                                "document_id": source_id,
+                                "one_sentence": result.one_sentence,
+                                "executive": result.executive,
+                                "model_used": result.model_used,
+                                "created_at": datetime.utcnow().isoformat(),
+                            }
+                        )
+                        .execute()
+                    )
 
             except (ImportError, AttributeError):
                 pass  # Brain Layer not available
@@ -672,7 +680,7 @@ Abstract:"""
         self,
         run_id: str,
         source_id: str,
-        levels: List[SummaryLevel],
+        levels: list[SummaryLevel],
     ) -> None:
         """Log summarization start."""
         try:
@@ -683,7 +691,7 @@ Abstract:"""
                 input_summary=f"Summarizing {source_id}",
                 metadata={
                     "source_id": source_id,
-                    "levels": [l.value for l in levels],
+                    "levels": [lvl.value for lvl in levels],
                 },
             )
             await self.brain_logger.log_run_start(run_create)
@@ -770,7 +778,7 @@ Abstract:"""
             },
         )
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get summarizer statistics."""
         return self._stats.copy()
 
@@ -779,10 +787,11 @@ Abstract:"""
 # Factory Function
 # =============================================================================
 
+
 def create_summarizer_agent(
-    config: Optional[AgentConfig] = None,
-    summarizer_config: Optional[SummarizerConfig] = None,
-    context: Optional[AgentContext] = None,
+    config: AgentConfig | None = None,
+    summarizer_config: SummarizerConfig | None = None,
+    context: AgentContext | None = None,
 ) -> SummarizerAgent:
     """
     Factory function to create a SummarizerAgent.
