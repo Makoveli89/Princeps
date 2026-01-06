@@ -271,7 +271,7 @@ class TestEmbeddingNullability:
             session.query(DocChunk)
             .filter(
                 DocChunk.tenant_id == tenant.id,
-                DocChunk.embedding == None,  # noqa: E711 - SQLAlchemy needs == None
+                DocChunk.embedding.is_(None),
             )
             .all()
         )

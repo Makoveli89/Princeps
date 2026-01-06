@@ -68,7 +68,7 @@ else:
     # --- Detail View ---
     st.subheader("Run Details")
     selected_run_id = st.selectbox(
-        "Select Run to Inspect", options=[r.id for r in runs], format_func=lambda x: str(x)
+        "Select Run to Inspect", options=[r.id for r in runs], format_func=str
     )
 
     if selected_run_id:
