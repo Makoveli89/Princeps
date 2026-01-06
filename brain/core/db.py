@@ -52,15 +52,8 @@ def get_database_url() -> str:
     if url := os.getenv("DATABASE_URL"):
         return url
 
-    host = os.getenv("POSTGRES_HOST", "localhost")
-    port = os.getenv("POSTGRES_PORT", "5432")
-    user = os.getenv("POSTGRES_USER", "postgres")
-    password = os.getenv("POSTGRES_PASSWORD", "")
-    database = os.getenv("POSTGRES_DB", "princeps_brain")
-
-    if password:
-        return f"postgresql://{user}:{password}@{host}:{port}/{database}"
-    return f"postgresql://{user}@{host}:{port}/{database}"
+    # Default to local SQLite if no Postgres config
+    return "sqlite:///./princeps.db"
 
 
 # =============================================================================

@@ -1,0 +1,5 @@
+{
+  "name": "Princeps Console",
+  "description": "An internal command console for the Princeps AI system. Integrates brain (knowledge), arms (agents), and system health in a gothic-cyberpunk interface.",
+  "requestFramePermissions": []
+}
