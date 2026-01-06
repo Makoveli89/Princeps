@@ -31,3 +31,4 @@ pypdf
 python-multipart
 python-dotenv
 slowapi
+httpx
