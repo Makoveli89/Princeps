@@ -12,9 +12,12 @@ import { SystemHealth } from './pages/SystemHealth';
 import { Chatbot } from './pages/Chatbot';
 import { INITIAL_WORKSPACES } from './constants';
 import { Workspace } from './types';
+import { useToast } from './hooks/use-toast';
+import { Toaster } from './components/ui/toaster';
 
 const App = () => {
   const [workspaces, setWorkspaces] = useState<Workspace[]>(INITIAL_WORKSPACES);
+  const { toast } = useToast();
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -27,9 +30,20 @@ const App = () => {
         if (data.length > 0 && !activeWorkspaceId) {
           setActiveWorkspaceId(data[0].id);
         }
+      } else {
+        toast({
+          title: "Connection Failed",
+          description: "Could not fetch workspaces from server.",
+          variant: "destructive",
+        });
       }
     } catch (e) {
       console.error("Failed to fetch workspaces", e);
+      toast({
+        title: "System Error",
+        description: "Critical failure connecting to backend.",
+        variant: "destructive",
+      });
     } finally {
       setLoading(false);
     }
@@ -54,6 +68,7 @@ const App = () => {
         <HashRouter>
             <div className="min-h-screen bg-[#050505] text-white p-10">
                 <Workspaces workspaces={[]} activeId={null} onChange={() => {}} />
+                <Toaster />
             </div>
         </HashRouter>
       )
