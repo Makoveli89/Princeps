@@ -1,6 +1,7 @@
 import os
-from sqlalchemy import create_engine, text
+
 from dotenv import load_dotenv
+from sqlalchemy import create_engine, text
 
 load_dotenv()
 
@@ -9,7 +10,7 @@ if not database_url:
     print("❌ DATABASE_URL not found in .env")
     exit(1)
 
-print(f"Connecting to: {database_url.split('@')[-1]}") # Print host only for safety
+print(f"Connecting to: {database_url.split('@')[-1]}")  # Print host only for safety
 
 try:
     engine = create_engine(database_url)

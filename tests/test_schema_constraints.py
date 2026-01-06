@@ -1,14 +1,23 @@
 """Tests for Alembic migration schema constraints."""
-import pytest
-from uuid import uuid4
-from sqlalchemy.exc import IntegrityError
 
+from uuid import uuid4
+
+from brain.core.db import compute_content_hash, compute_input_hash, get_or_create_operation
 from brain.core.models import (
-    Tenant, Document, DocChunk, Operation, Repository, Resource,
-    DocumentSummary, DocumentEntity, Artifact, KnowledgeNode, KnowledgeEdge,
-    OperationTypeEnum, OperationStatusEnum, ResourceTypeEnum, NodeKnowledgeTypeEnum,
+    DocChunk,
+    Document,
+    DocumentSummary,
+    KnowledgeEdge,
+    KnowledgeNode,
+    NodeKnowledgeTypeEnum,
+    Operation,
+    OperationStatusEnum,
+    OperationTypeEnum,
+    Repository,
+    Resource,
+    ResourceTypeEnum,
+    Tenant,
 )
-from brain.core.db import get_or_create_operation, compute_input_hash, compute_content_hash
 
 
 class TestForeignKeyConstraints:
@@ -273,9 +282,7 @@ class TestIndexConstraints:
         session.commit()
 
         # Query should use tenant_id index
-        docs = session.query(Document).filter(
-            Document.tenant_id == tenant.id
-        ).all()
+        docs = session.query(Document).filter(Document.tenant_id == tenant.id).all()
 
         assert len(docs) == 10
 
@@ -288,9 +295,9 @@ class TestIndexConstraints:
         session.commit()
 
         # Query by input_hash should use index
-        found = session.query(Operation).filter(
-            Operation.input_hash == operation.input_hash
-        ).first()
+        found = (
+            session.query(Operation).filter(Operation.input_hash == operation.input_hash).first()
+        )
 
         assert found is not None
         assert found.id == operation.id
@@ -324,9 +331,9 @@ class TestModelAssumptionsAlignment:
         session.commit()
 
         # Verify all expected fields exist
-        assert hasattr(operation, 'created_at')
-        assert hasattr(operation, 'started_at')
-        assert hasattr(operation, 'completed_at')
-        assert hasattr(operation, 'status')
-        assert hasattr(operation, 'error_message')
-        assert hasattr(operation, 'retry_count')
+        assert hasattr(operation, "created_at")
+        assert hasattr(operation, "started_at")
+        assert hasattr(operation, "completed_at")
+        assert hasattr(operation, "status")
+        assert hasattr(operation, "error_message")
+        assert hasattr(operation, "retry_count")

@@ -1,24 +1,24 @@
 """Tests for logging output clarity, consistency, and sensitive value handling."""
-import pytest
-import logging
+
 import json
-from io import StringIO
-from unittest.mock import patch
+import logging
+
+import pytest
 
 from brain.observability.logging_config import (
-    setup_logging,
-    get_logger,
+    ContextFormatter,
     OperationContext,
     OperationLogger,
     StructuredFormatter,
-    ContextFormatter,
-    get_correlation_id,
-    set_correlation_id,
-    get_operation_id,
-    set_operation_id,
     generate_correlation_id,
     generate_operation_id,
+    get_correlation_id,
+    get_logger,
+    get_operation_id,
     log_exception,
+    set_correlation_id,
+    set_operation_id,
+    setup_logging,
 )
 
 
@@ -138,7 +138,7 @@ class TestStructuredFormatter:
             lineno=10,
             msg="Test message",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         output = formatter.format(record)
@@ -160,7 +160,7 @@ class TestStructuredFormatter:
                 lineno=10,
                 msg="Test",
                 args=(),
-                exc_info=None
+                exc_info=None,
             )
             output = formatter.format(record)
 
@@ -178,7 +178,7 @@ class TestStructuredFormatter:
             lineno=10,
             msg="Test",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         output = formatter.format(record)
@@ -203,7 +203,7 @@ class TestContextFormatter:
                 lineno=10,
                 msg="Test message",
                 args=(),
-                exc_info=None
+                exc_info=None,
             )
             output = formatter.format(record)
 
@@ -229,7 +229,7 @@ class TestSensitiveValueHandling:
             lineno=10,
             msg="Processing request: %s",
             args=(str(sensitive_data),),
-            exc_info=None
+            exc_info=None,
         )
 
         # Note: The current implementation doesn't automatically redact
@@ -251,7 +251,7 @@ class TestSensitiveValueHandling:
             lineno=10,
             msg="API call with key",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         # In production, API keys should be masked
@@ -289,6 +289,7 @@ class TestOperationLogger:
         op_logger = OperationLogger(logger, "timed_operation")
         with op_logger:
             import time
+
             time.sleep(0.1)
 
         assert op_logger.duration_ms >= 100
@@ -317,10 +318,11 @@ class TestLogExceptionHelper:
             raise RuntimeError("Test")
         except RuntimeError as e:
             log_exception(
-                logger, "Operation failed",
+                logger,
+                "Operation failed",
                 exception=e,
                 operation_type="ingest",
-                document_id="doc-123"
+                document_id="doc-123",
             )
 
 
@@ -337,7 +339,7 @@ class TestTimestampConsistency:
             lineno=10,
             msg="Test",
             args=(),
-            exc_info=None
+            exc_info=None,
         )
 
         output = formatter.format(record)

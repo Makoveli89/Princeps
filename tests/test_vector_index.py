@@ -1,9 +1,6 @@
 """Tests for vector index population for all chunk types."""
-import pytest
-from uuid import uuid4
 
-from brain.core.models import DocChunk, KnowledgeNode, Document, NodeKnowledgeTypeEnum
-from brain.core.db import compute_content_hash
+from brain.core.models import DocChunk, KnowledgeNode, NodeKnowledgeTypeEnum
 
 
 class TestVectorIndexPopulation:
@@ -21,7 +18,7 @@ class TestVectorIndexPopulation:
         session.commit()
 
         # Verify embedding field exists (even if None initially)
-        assert hasattr(chunk, 'embedding')
+        assert hasattr(chunk, "embedding")
 
     def test_chunk_with_embedding(self, session, tenant, sample_document):
         """DocChunk should accept embedding vector."""
@@ -54,7 +51,7 @@ class TestVectorIndexPopulation:
         session.add(node)
         session.commit()
 
-        assert hasattr(node, 'embedding')
+        assert hasattr(node, "embedding")
 
     def test_multiple_chunks_have_embeddings(self, session, tenant, sample_document):
         """Multiple chunks should each have their own embedding."""
@@ -73,9 +70,12 @@ class TestVectorIndexPopulation:
         session.commit()
 
         # All chunks should be created
-        db_chunks = session.query(DocChunk).filter_by(
-            document_id=sample_document.id
-        ).order_by(DocChunk.chunk_index).all()
+        db_chunks = (
+            session.query(DocChunk)
+            .filter_by(document_id=sample_document.id)
+            .order_by(DocChunk.chunk_index)
+            .all()
+        )
 
         assert len(db_chunks) == 3
 
@@ -161,9 +161,9 @@ class TestVectorSearchPrerequisites:
         session.commit()
 
         # Filter by document
-        doc_chunks = session.query(DocChunk).filter(
-            DocChunk.document_id == sample_document.id
-        ).all()
+        doc_chunks = (
+            session.query(DocChunk).filter(DocChunk.document_id == sample_document.id).all()
+        )
 
         assert len(doc_chunks) == 3
 
@@ -179,9 +179,7 @@ class TestVectorSearchPrerequisites:
         session.commit()
 
         # Filter by tenant
-        tenant_chunks = session.query(DocChunk).filter(
-            DocChunk.tenant_id == tenant.id
-        ).all()
+        tenant_chunks = session.query(DocChunk).filter(DocChunk.tenant_id == tenant.id).all()
 
         assert len(tenant_chunks) >= 1
 
@@ -226,9 +224,7 @@ class TestKnowledgeNodeEmbeddings:
 
         session.commit()
 
-        all_nodes = session.query(KnowledgeNode).filter(
-            KnowledgeNode.tenant_id == tenant.id
-        ).all()
+        all_nodes = session.query(KnowledgeNode).filter(KnowledgeNode.tenant_id == tenant.id).all()
 
         assert len(all_nodes) == len(node_types)
 
@@ -271,10 +267,14 @@ class TestEmbeddingNullability:
         session.commit()
 
         # Find chunks needing embeddings
-        needs_embedding = session.query(DocChunk).filter(
-            DocChunk.tenant_id == tenant.id,
-            DocChunk.embedding == None  # noqa: E711 - SQLAlchemy needs == None
-        ).all()
+        needs_embedding = (
+            session.query(DocChunk)
+            .filter(
+                DocChunk.tenant_id == tenant.id,
+                DocChunk.embedding == None,  # noqa: E711 - SQLAlchemy needs == None
+            )
+            .all()
+        )
 
         assert len(needs_embedding) == 1
         assert needs_embedding[0].content == "No embedding"

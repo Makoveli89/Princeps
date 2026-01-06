@@ -1,23 +1,23 @@
 """Pytest configuration and fixtures for Princeps Brain Layer tests."""
+
+import asyncio
+import json
 import os
 import sys
-import json
-import pytest
-import asyncio
-from datetime import datetime
 from uuid import uuid4
+
+import pytest
 
 # Add project root to path
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
-from sqlalchemy import create_engine, event, Text, String
+from sqlalchemy import String, Text, TypeDecorator, create_engine, event
 from sqlalchemy.orm import sessionmaker
-from sqlalchemy import TypeDecorator
-
 
 # =============================================================================
 # ASYNC TEST SUPPORT
 # =============================================================================
+
 
 @pytest.fixture(scope="session")
 def event_loop():
@@ -33,8 +33,10 @@ def event_loop():
 # Define SQLite-compatible type adapters BEFORE importing models
 # These will be used to create a separate Base for testing
 
+
 class SQLiteJSONB(TypeDecorator):
     """SQLite-compatible JSONB (stores as JSON text)."""
+
     impl = Text
     cache_ok = True
 
@@ -51,6 +53,7 @@ class SQLiteJSONB(TypeDecorator):
 
 class SQLiteArray(TypeDecorator):
     """SQLite-compatible ARRAY (stores as JSON list)."""
+
     impl = Text
     cache_ok = True
 
@@ -64,8 +67,10 @@ class SQLiteArray(TypeDecorator):
             return json.loads(value)
         return None
 
+
 class SQLiteUUID(TypeDecorator):
     """SQLite-compatible UUID (stores as string)."""
+
     impl = String(36)
     cache_ok = True
 
@@ -77,6 +82,7 @@ class SQLiteUUID(TypeDecorator):
     def process_result_value(self, value, dialect):
         if value is not None:
             from uuid import UUID as UUIDType
+
             if isinstance(value, UUIDType):
                 return value
             return UUIDType(value)
@@ -100,6 +106,7 @@ pg_dialect.UUID = lambda *args, **kwargs: SQLiteUUID()
 # Also patch the vector type if present
 try:
     import pgvector.sqlalchemy as pgv
+
     # Replace Vector with a Text column for SQLite
     class SQLiteVector(TypeDecorator):
         impl = Text
@@ -124,7 +131,7 @@ except ImportError:
     pass
 
 # Now import models (after patching)
-from brain.core.models import Base, Tenant, Document, DocChunk, Operation, OperationTypeEnum, OperationStatusEnum
+from brain.core.models import Base, DocChunk, Document, Tenant
 
 
 @pytest.fixture(scope="session")

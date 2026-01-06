@@ -2,33 +2,31 @@
 Ingestion Service - Handles document ingestion, chunking, and storage.
 """
 
-import logging
-import uuid
 import hashlib
-import tempfile
+import logging
 import os
-import shutil
-from typing import List, Optional, Dict, Any, BinaryIO
-from datetime import datetime
+import uuid
+from typing import Any, BinaryIO
 
-from sqlalchemy.orm import Session
-from sqlalchemy import select
-
+from brain.core.db import get_session
 from brain.core.models import (
-    Document,
     DocChunk,
+    Document,
+    KnowledgeTypeEnum,
+    Operation,
+    OperationStatusEnum,
+    OperationTypeEnum,
     Resource,
     ResourceTypeEnum,
-    KnowledgeTypeEnum,
     SecurityLevelEnum,
-    Operation,
-    OperationTypeEnum,
-    OperationStatusEnum,
 )
-from brain.core.db import get_session
-from framework.retrieval.vector_search import get_embedding_service, PgVectorIndex, VectorSearchConfig, VectorBackend
+from framework.retrieval.vector_search import (
+    PgVectorIndex,
+    get_embedding_service,
+)
 
 logger = logging.getLogger(__name__)
+
 
 class IngestionService:
     def __init__(self):
@@ -36,19 +34,16 @@ class IngestionService:
         # Initialize pgvector index
         # Note: Connection string usually from env or config.
         # For this setup we rely on environment variables used by the brain module.
-        import os
         db_url = os.getenv("DATABASE_URL")
-        self.vector_index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks") if db_url else None
+        self.vector_index = (
+            PgVectorIndex(connection_string=db_url, table_name="doc_chunks") if db_url else None
+        )
 
         # In a real app we'd verify connection, but for now we assume it's setup or will fail gracefully
 
     async def ingest_file(
-        self,
-        file_obj: BinaryIO,
-        filename: str,
-        workspace_id: str,
-        content_type: str = "text/plain"
-    ) -> Dict[str, Any]:
+        self, file_obj: BinaryIO, filename: str, workspace_id: str, content_type: str = "text/plain"
+    ) -> dict[str, Any]:
         """
         Ingest a file: Save as Resource -> Parse -> Create Document -> Chunk -> Embed -> Store.
         """
@@ -61,8 +56,10 @@ class IngestionService:
         text_content = ""
         if content_type == "application/pdf" or filename.endswith(".pdf"):
             try:
-                import pypdf
                 from io import BytesIO
+
+                import pypdf
+
                 reader = pypdf.PdfReader(BytesIO(content_bytes))
                 text_content = "\n".join([page.extract_text() for page in reader.pages])
             except ImportError:
@@ -77,7 +74,7 @@ class IngestionService:
             try:
                 text_content = content_bytes.decode("utf-8")
             except UnicodeDecodeError:
-                text_content = content_bytes.decode("latin-1") # Fallback
+                text_content = content_bytes.decode("latin-1")  # Fallback
 
         if not text_content:
             text_content = "[Empty Content]"
@@ -86,17 +83,21 @@ class IngestionService:
         with get_session() as db:
             # Check for existing resource/document to avoid duplicates (idempotency)
             # Strategy: If content hash exists in tenant, return existing
-            existing_doc = db.query(Document).filter(
-                Document.tenant_id == uuid.UUID(workspace_id),
-                Document.content_hash == content_hash
-            ).first()
+            existing_doc = (
+                db.query(Document)
+                .filter(
+                    Document.tenant_id == uuid.UUID(workspace_id),
+                    Document.content_hash == content_hash,
+                )
+                .first()
+            )
 
             if existing_doc:
                 return {
                     "status": "skipped",
                     "reason": "duplicate",
                     "document_id": str(existing_doc.id),
-                    "title": existing_doc.title
+                    "title": existing_doc.title,
                 }
 
             # Create Resource
@@ -104,13 +105,13 @@ class IngestionService:
             resource = Resource(
                 id=resource_id,
                 tenant_id=uuid.UUID(workspace_id),
-                file_path=f"uploads/{filename}", # Virtual path
+                file_path=f"uploads/{filename}",  # Virtual path
                 file_name=filename,
                 resource_type=self._guess_resource_type(filename, content_type),
                 content_hash=content_hash,
                 size_bytes=len(content_bytes),
                 is_active=True,
-                is_parsed=True
+                is_parsed=True,
             )
             db.add(resource)
 
@@ -126,8 +127,8 @@ class IngestionService:
                 doc_type=KnowledgeTypeEnum.DOCUMENTATION,
                 source="upload",
                 security_level=SecurityLevelEnum.INTERNAL,
-                is_chunked=False, # Will mark true after chunking
-                is_embedded=False
+                is_chunked=False,  # Will mark true after chunking
+                is_embedded=False,
             )
             db.add(document)
 
@@ -156,8 +157,8 @@ class IngestionService:
                     document_id=document_id,
                     content=chunk_data["content"],
                     chunk_index=i,
-                    token_count=len(chunk_data["content"]) // 4, # Rough approx
-                    embedding=embedding
+                    token_count=len(chunk_data["content"]) // 4,  # Rough approx
+                    embedding=embedding,
                 )
                 db.add(doc_chunk)
                 doc_chunks.append(doc_chunk)
@@ -171,10 +172,10 @@ class IngestionService:
             op = Operation(
                 tenant_id=uuid.UUID(workspace_id),
                 op_type=OperationTypeEnum.INGEST_DOCUMENT,
-                input_hash=content_hash, # Simplified
+                input_hash=content_hash,  # Simplified
                 inputs={"filename": filename, "size": len(content_bytes)},
                 status=OperationStatusEnum.SUCCESS,
-                document_id=document_id
+                document_id=document_id,
             )
             db.add(op)
 
@@ -184,7 +185,7 @@ class IngestionService:
                 "status": "success",
                 "document_id": str(document_id),
                 "chunks": len(doc_chunks),
-                "title": filename
+                "title": filename,
             }
 
     def _guess_resource_type(self, filename: str, content_type: str) -> ResourceTypeEnum:
@@ -196,7 +197,9 @@ class IngestionService:
             return ResourceTypeEnum.CONFIG
         return ResourceTypeEnum.DOCUMENT
 
-    def _chunk_text(self, text: str, chunk_size: int = 1000, overlap: int = 100) -> List[Dict[str, Any]]:
+    def _chunk_text(
+        self, text: str, chunk_size: int = 1000, overlap: int = 100
+    ) -> list[dict[str, Any]]:
         """
         Simple overlapping chunker.
         """
@@ -213,12 +216,12 @@ class IngestionService:
             # If we are not at the end, try to break at a newline or space
             if end < text_len:
                 # Look for last newline in the window
-                last_newline = text.rfind('\n', start, end)
+                last_newline = text.rfind("\n", start, end)
                 if last_newline != -1 and last_newline > start + chunk_size // 2:
                     end = last_newline + 1
                 else:
                     # Look for last space
-                    last_space = text.rfind(' ', start, end)
+                    last_space = text.rfind(" ", start, end)
                     if last_space != -1 and last_space > start + chunk_size // 2:
                         end = last_space + 1
 
@@ -227,7 +230,8 @@ class IngestionService:
                 chunks.append({"content": chunk_content})
 
             start = end - overlap
-            if start < 0: start = 0 # Safety
+            if start < 0:
+                start = 0  # Safety
 
             # Ensure we advance
             if start >= end:

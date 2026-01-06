@@ -29,22 +29,23 @@ Adapted from patterns in:
 """
 
 import asyncio
+import functools
 import logging
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Set, Type, Union
-import inspect
-import functools
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class ToolSecurityLevel(Enum):
     """Security level for tools - determines required permissions"""
+
     SAFE = "safe"  # No side effects, read-only
     STANDARD = "standard"  # Normal operations with controlled side effects
     ELEVATED = "elevated"  # Requires additional authorization
@@ -54,6 +55,7 @@ class ToolSecurityLevel(Enum):
 
 class ToolCategory(Enum):
     """Category of tool for organization and filtering"""
+
     SHELL = "shell"  # Shell/command execution
     API = "api"  # External API calls
     DATABASE = "database"  # Database operations
@@ -67,6 +69,7 @@ class ToolCategory(Enum):
 
 class ToolExecutionStatus(Enum):
     """Status of a tool execution"""
+
     SUCCESS = "success"
     FAILED = "failed"
     TIMEOUT = "timeout"
@@ -78,15 +81,16 @@ class ToolExecutionStatus(Enum):
 @dataclass
 class ToolParameter:
     """Definition of a tool parameter"""
+
     name: str
     type: str  # "string", "int", "float", "bool", "dict", "list", "any"
     description: str
     required: bool = True
     default: Any = None
-    allowed_values: Optional[List[Any]] = None
-    validation_regex: Optional[str] = None
+    allowed_values: list[Any] | None = None
+    validation_regex: str | None = None
 
-    def validate(self, value: Any) -> tuple[bool, Optional[str]]:
+    def validate(self, value: Any) -> tuple[bool, str | None]:
         """Validate a parameter value"""
         import re
 
@@ -125,26 +129,27 @@ class ToolParameter:
 @dataclass
 class ToolResult:
     """Result of a tool execution"""
+
     tool_name: str
     status: ToolExecutionStatus
     output: Any = None
-    error: Optional[str] = None
-    error_type: Optional[str] = None
+    error: str | None = None
+    error_type: str | None = None
 
     # Execution metadata
     execution_time_ms: float = 0.0
     started_at: datetime = field(default_factory=datetime.now)
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     # Security/audit info
     was_sandboxed: bool = False
-    security_warnings: List[str] = field(default_factory=list)
+    security_warnings: list[str] = field(default_factory=list)
 
     # For chaining
     can_chain: bool = True
-    output_type: Optional[str] = None
+    output_type: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "tool_name": self.tool_name,
             "status": self.status.value,
@@ -164,13 +169,14 @@ class ToolResult:
 @dataclass
 class ToolDefinition:
     """Complete definition of a tool"""
+
     name: str
     description: str
     category: ToolCategory
     security_level: ToolSecurityLevel
 
     # Parameters
-    parameters: List[ToolParameter] = field(default_factory=list)
+    parameters: list[ToolParameter] = field(default_factory=list)
 
     # Behavior
     is_async: bool = False
@@ -178,8 +184,8 @@ class ToolDefinition:
     max_retries: int = 1
 
     # Security
-    required_permissions: Set[str] = field(default_factory=set)
-    blocked_tenants: Set[str] = field(default_factory=set)
+    required_permissions: set[str] = field(default_factory=set)
+    blocked_tenants: set[str] = field(default_factory=set)
     requires_approval: bool = False
 
     # Output
@@ -187,11 +193,11 @@ class ToolDefinition:
 
     # Metadata
     version: str = "1.0.0"
-    author: Optional[str] = None
-    documentation_url: Optional[str] = None
-    examples: List[Dict[str, Any]] = field(default_factory=list)
+    author: str | None = None
+    documentation_url: str | None = None
+    examples: list[dict[str, Any]] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "name": self.name,
             "description": self.description,
@@ -235,8 +241,8 @@ class BaseTool(ABC):
     @abstractmethod
     async def execute(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         """
         Execute the tool with given parameters.
@@ -250,7 +256,7 @@ class BaseTool(ABC):
         """
         pass
 
-    def validate_parameters(self, parameters: Dict[str, Any]) -> tuple[bool, List[str]]:
+    def validate_parameters(self, parameters: dict[str, Any]) -> tuple[bool, list[str]]:
         """Validate input parameters against definition"""
         errors = []
 
@@ -268,19 +274,19 @@ class BaseTool(ABC):
 
         return len(errors) == 0, errors
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get execution statistics"""
         return {
             "execution_count": self._execution_count,
             "total_execution_time_ms": self._total_execution_time,
             "avg_execution_time_ms": (
                 self._total_execution_time / self._execution_count
-                if self._execution_count > 0 else 0
+                if self._execution_count > 0
+                else 0
             ),
             "error_count": self._error_count,
             "error_rate": (
-                self._error_count / self._execution_count
-                if self._execution_count > 0 else 0
+                self._error_count / self._execution_count if self._execution_count > 0 else 0
             ),
         }
 
@@ -288,13 +294,14 @@ class BaseTool(ABC):
 @dataclass
 class TenantPolicy:
     """Security policy for a tenant"""
+
     tenant_id: str
-    allowed_tools: Optional[Set[str]] = None  # None = all allowed
-    blocked_tools: Set[str] = field(default_factory=set)
-    allowed_categories: Optional[Set[ToolCategory]] = None
-    blocked_categories: Set[ToolCategory] = field(default_factory=set)
+    allowed_tools: set[str] | None = None  # None = all allowed
+    blocked_tools: set[str] = field(default_factory=set)
+    allowed_categories: set[ToolCategory] | None = None
+    blocked_categories: set[ToolCategory] = field(default_factory=set)
     max_security_level: ToolSecurityLevel = ToolSecurityLevel.STANDARD
-    permissions: Set[str] = field(default_factory=set)
+    permissions: set[str] = field(default_factory=set)
 
     # Limits
     max_concurrent_executions: int = 10
@@ -338,7 +345,7 @@ class ToolRegistry:
         self,
         security_scanner=None,
         brain_logger=None,
-        default_policy: Optional[TenantPolicy] = None,
+        default_policy: TenantPolicy | None = None,
     ):
         """
         Initialize the tool registry.
@@ -348,8 +355,8 @@ class ToolRegistry:
             brain_logger: BrainLogger for audit logging
             default_policy: Default tenant policy for unregistered tenants
         """
-        self._tools: Dict[str, BaseTool] = {}
-        self._tenant_policies: Dict[str, TenantPolicy] = {}
+        self._tools: dict[str, BaseTool] = {}
+        self._tenant_policies: dict[str, TenantPolicy] = {}
         self._security_scanner = security_scanner
         self._brain_logger = brain_logger
 
@@ -359,12 +366,12 @@ class ToolRegistry:
         )
 
         # Execution tracking
-        self._active_executions: Dict[str, Dict[str, Any]] = {}
-        self._execution_history: List[Dict[str, Any]] = []
+        self._active_executions: dict[str, dict[str, Any]] = {}
+        self._execution_history: list[dict[str, Any]] = []
 
         # Callbacks for execution events
-        self._pre_execution_hooks: List[Callable] = []
-        self._post_execution_hooks: List[Callable] = []
+        self._pre_execution_hooks: list[Callable] = []
+        self._post_execution_hooks: list[Callable] = []
 
         logger.info("ToolRegistry initialized")
 
@@ -395,16 +402,16 @@ class ToolRegistry:
             return True
         return False
 
-    def get(self, tool_name: str) -> Optional[BaseTool]:
+    def get(self, tool_name: str) -> BaseTool | None:
         """Get a tool by name"""
         return self._tools.get(tool_name)
 
     def list_tools(
         self,
-        category: Optional[ToolCategory] = None,
-        security_level: Optional[ToolSecurityLevel] = None,
-        tenant_id: Optional[str] = None,
-    ) -> List[ToolDefinition]:
+        category: ToolCategory | None = None,
+        security_level: ToolSecurityLevel | None = None,
+        tenant_id: str | None = None,
+    ) -> list[ToolDefinition]:
         """
         List available tools with optional filtering.
 
@@ -499,9 +506,9 @@ class ToolRegistry:
     async def execute(
         self,
         tool_name: str,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
-        timeout: Optional[float] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> ToolResult:
         """
         Execute a tool with security checks and logging.
@@ -606,18 +613,16 @@ class ToolRegistry:
         try:
             if defn.is_async:
                 result = await asyncio.wait_for(
-                    tool.execute(parameters, context),
-                    timeout=effective_timeout
+                    tool.execute(parameters, context), timeout=effective_timeout
                 )
             else:
                 # Run sync tool in executor
                 loop = asyncio.get_event_loop()
                 result = await asyncio.wait_for(
                     loop.run_in_executor(
-                        None,
-                        lambda: asyncio.run(tool.execute(parameters, context))
+                        None, lambda: asyncio.run(tool.execute(parameters, context))
                     ),
-                    timeout=effective_timeout
+                    timeout=effective_timeout,
                 )
 
             # Update stats
@@ -677,14 +682,16 @@ class ToolRegistry:
                 logger.warning(f"Post-execution hook failed: {e}")
 
         # Log to history
-        self._execution_history.append({
-            "execution_id": execution_id,
-            "tool_name": tool_name,
-            "tenant_id": tenant_id,
-            "status": result.status.value,
-            "execution_time_ms": result.execution_time_ms,
-            "timestamp": result.started_at.isoformat(),
-        })
+        self._execution_history.append(
+            {
+                "execution_id": execution_id,
+                "tool_name": tool_name,
+                "tenant_id": tenant_id,
+                "status": result.status.value,
+                "execution_time_ms": result.execution_time_ms,
+                "timestamp": result.started_at.isoformat(),
+            }
+        )
 
         # Limit history size
         if len(self._execution_history) > 1000:
@@ -695,9 +702,9 @@ class ToolRegistry:
     def execute_sync(
         self,
         tool_name: str,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
-        timeout: Optional[float] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
+        timeout: float | None = None,
     ) -> ToolResult:
         """Synchronous wrapper for execute"""
         try:
@@ -706,26 +713,21 @@ class ToolRegistry:
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
-        return loop.run_until_complete(
-            self.execute(tool_name, parameters, context, timeout)
-        )
+        return loop.run_until_complete(self.execute(tool_name, parameters, context, timeout))
 
-    def get_tool_stats(self, tool_name: str) -> Optional[Dict[str, Any]]:
+    def get_tool_stats(self, tool_name: str) -> dict[str, Any] | None:
         """Get execution statistics for a tool"""
         tool = self._tools.get(tool_name)
         if tool:
             return tool.get_stats()
         return None
 
-    def get_registry_stats(self) -> Dict[str, Any]:
+    def get_registry_stats(self) -> dict[str, Any]:
         """Get overall registry statistics"""
         return {
             "registered_tools": len(self._tools),
             "tools_by_category": {
-                cat.value: sum(
-                    1 for t in self._tools.values()
-                    if t.definition.category == cat
-                )
+                cat.value: sum(1 for t in self._tools.values() if t.definition.category == cat)
                 for cat in ToolCategory
             },
             "active_executions": len(self._active_executions),
@@ -736,9 +738,9 @@ class ToolRegistry:
     def get_recent_executions(
         self,
         limit: int = 50,
-        tool_name: Optional[str] = None,
-        tenant_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        tool_name: str | None = None,
+        tenant_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         """Get recent execution history"""
         history = self._execution_history.copy()
 
@@ -752,7 +754,7 @@ class ToolRegistry:
 
 
 # Global registry instance
-_default_registry: Optional[ToolRegistry] = None
+_default_registry: ToolRegistry | None = None
 
 
 def get_tool_registry() -> ToolRegistry:
@@ -779,7 +781,7 @@ def tool(
     description: str,
     category: ToolCategory = ToolCategory.UTILITY,
     security_level: ToolSecurityLevel = ToolSecurityLevel.SAFE,
-    parameters: Optional[List[ToolParameter]] = None,
+    parameters: list[ToolParameter] | None = None,
     timeout_seconds: float = 60.0,
     is_async: bool = False,
 ):
@@ -803,6 +805,7 @@ def tool(
                 output=a + b
             )
     """
+
     def decorator(func: Callable):
         # Create a tool class from the function
         class FunctionTool(BaseTool):
@@ -825,8 +828,8 @@ def tool(
 
             async def execute(
                 self,
-                parameters: Dict[str, Any],
-                context: Optional[Dict[str, Any]] = None,
+                parameters: dict[str, Any],
+                context: dict[str, Any] | None = None,
             ) -> ToolResult:
                 try:
                     if asyncio.iscoroutinefunction(self._func):

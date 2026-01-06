@@ -25,39 +25,39 @@ Usage:
 """
 
 from framework.retrieval.vector_search import (
+    ChromaDBIndex,
+    DistanceMetric,
+    EmbeddingCache,
+    EmbeddingModel,
+    # Embedding
+    EmbeddingService,
+    InMemoryVectorIndex,
+    PgVectorIndex,
+    SearchFilter,
     # Enums
     VectorBackend,
-    DistanceMetric,
-    EmbeddingModel,
+    # Index classes
+    VectorIndex,
     # Configuration
     VectorSearchConfig,
     # Data classes
     VectorSearchResult,
-    SearchFilter,
-    # Embedding
-    EmbeddingService,
-    EmbeddingCache,
-    get_embedding_service,
-    embed_text,
     batch_embed_texts,
+    compute_similarity,
     # Similarity functions
     cosine_similarity,
-    euclidean_distance,
-    dot_product,
-    manhattan_distance,
-    compute_similarity,
-    # Index classes
-    VectorIndex,
-    InMemoryVectorIndex,
-    PgVectorIndex,
-    ChromaDBIndex,
-    # Query functions
-    query_vector_index,
-    hybrid_search,
+    create_chromadb_index,
     # Factory functions
     create_in_memory_index,
     create_pgvector_index,
-    create_chromadb_index,
+    dot_product,
+    embed_text,
+    euclidean_distance,
+    get_embedding_service,
+    hybrid_search,
+    manhattan_distance,
+    # Query functions
+    query_vector_index,
 )
 
 __all__ = [

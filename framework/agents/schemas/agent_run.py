@@ -31,12 +31,14 @@ Table Schema (agent_runs):
 import uuid
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional
+from typing import Any
+
 from pydantic import BaseModel, Field, validator
 
 
 class RunStatus(str, Enum):
     """Status of an agent run - matches DB enum"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -48,22 +50,21 @@ class RunStatus(str, Enum):
 class AgentRunCreate(BaseModel):
     """Schema for creating a new agent run record"""
 
-    task_id: Optional[str] = Field(None, description="Parent task ID if applicable")
+    task_id: str | None = Field(None, description="Parent task ID if applicable")
     agent_id: str = Field(..., description="Unique agent identifier")
     agent_name: str = Field(..., description="Human-readable agent name")
     agent_type: str = Field(..., description="Type of agent (summarization, code_gen, etc.)")
-    tenant_id: Optional[str] = Field(None, description="Tenant ID for multi-tenant isolation")
+    tenant_id: str | None = Field(None, description="Tenant ID for multi-tenant isolation")
 
     status: RunStatus = Field(default=RunStatus.PENDING)
     started_at: datetime = Field(default_factory=datetime.utcnow)
 
-    input_data: Dict[str, Any] = Field(
-        default_factory=dict,
-        description="Task input including prompt, messages, parameters"
+    input_data: dict[str, Any] = Field(
+        default_factory=dict, description="Task input including prompt, messages, parameters"
     )
-    context: Dict[str, Any] = Field(
+    context: dict[str, Any] = Field(
         default_factory=dict,
-        description="Additional context: tenant info, routing preferences, etc."
+        description="Additional context: tenant info, routing preferences, etc.",
     )
 
     class Config:
@@ -73,25 +74,24 @@ class AgentRunCreate(BaseModel):
 class AgentRunUpdate(BaseModel):
     """Schema for updating an existing agent run record"""
 
-    status: Optional[RunStatus] = None
-    completed_at: Optional[datetime] = None
-    success: Optional[bool] = None
+    status: RunStatus | None = None
+    completed_at: datetime | None = None
+    success: bool | None = None
 
-    output_data: Optional[Dict[str, Any]] = Field(
-        None,
-        description="Task output including response text, structured output"
+    output_data: dict[str, Any] | None = Field(
+        None, description="Task output including response text, structured output"
     )
 
-    error: Optional[str] = Field(None, description="Error message if failed")
-    error_type: Optional[str] = Field(None, description="Error classification")
+    error: str | None = Field(None, description="Error message if failed")
+    error_type: str | None = Field(None, description="Error classification")
 
-    retry_count: Optional[int] = Field(None, ge=0)
-    tokens_used: Optional[int] = Field(None, ge=0)
-    model_used: Optional[str] = None
-    fallback_used: Optional[bool] = None
+    retry_count: int | None = Field(None, ge=0)
+    tokens_used: int | None = Field(None, ge=0)
+    model_used: str | None = None
+    fallback_used: bool | None = None
 
     # Model usage tracking in context
-    context: Optional[Dict[str, Any]] = None
+    context: dict[str, Any] | None = None
 
     class Config:
         use_enum_values = True
@@ -105,28 +105,28 @@ class AgentRunRecord(BaseModel):
     """
 
     id: str = Field(default_factory=lambda: str(uuid.uuid4()))
-    task_id: Optional[str] = None
+    task_id: str | None = None
     agent_id: str
     agent_name: str
     agent_type: str
-    tenant_id: Optional[str] = None
+    tenant_id: str | None = None
 
     started_at: datetime
-    completed_at: Optional[datetime] = None
+    completed_at: datetime | None = None
 
     status: RunStatus
     success: bool = False
 
-    input_data: Dict[str, Any] = Field(default_factory=dict)
-    output_data: Dict[str, Any] = Field(default_factory=dict)
-    context: Dict[str, Any] = Field(default_factory=dict)
+    input_data: dict[str, Any] = Field(default_factory=dict)
+    output_data: dict[str, Any] = Field(default_factory=dict)
+    context: dict[str, Any] = Field(default_factory=dict)
 
-    error: Optional[str] = None
-    error_type: Optional[str] = None
+    error: str | None = None
+    error_type: str | None = None
 
     retry_count: int = 0
     tokens_used: int = 0
-    model_used: Optional[str] = None
+    model_used: str | None = None
     fallback_used: bool = False
 
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -135,17 +135,17 @@ class AgentRunRecord(BaseModel):
     class Config:
         use_enum_values = True
 
-    def to_db_dict(self) -> Dict[str, Any]:
+    def to_db_dict(self) -> dict[str, Any]:
         """Convert to dictionary suitable for database insertion"""
         data = self.dict()
         # Convert datetimes to ISO format for JSON serialization
-        for key in ['started_at', 'completed_at', 'created_at', 'updated_at']:
+        for key in ["started_at", "completed_at", "created_at", "updated_at"]:
             if data[key] is not None:
                 data[key] = data[key].isoformat() if isinstance(data[key], datetime) else data[key]
         return data
 
     @classmethod
-    def from_db_row(cls, row: Dict[str, Any]) -> "AgentRunRecord":
+    def from_db_row(cls, row: dict[str, Any]) -> "AgentRunRecord":
         """Create instance from database row"""
         return cls(**row)
 
@@ -168,15 +168,12 @@ class ModelUsageRecord(BaseModel):
     latency_ms: float = Field(default=0.0, ge=0)
     success: bool = True
 
-    is_fallback: bool = Field(
-        default=False,
-        description="Whether this was a fallback attempt"
-    )
+    is_fallback: bool = Field(default=False, description="Whether this was a fallback attempt")
     attempt_number: int = Field(default=1, ge=1)
 
     timestamp: datetime = Field(default_factory=datetime.utcnow)
 
-    error: Optional[str] = None
+    error: str | None = None
 
 
 class PIIScanResult(BaseModel):
@@ -192,20 +189,17 @@ class PIIScanResult(BaseModel):
     has_pii: bool = False
     has_secrets: bool = False
 
-    pii_types_found: List[str] = Field(
-        default_factory=list,
-        description="Types of PII detected (email, phone, ssn, etc.)"
+    pii_types_found: list[str] = Field(
+        default_factory=list, description="Types of PII detected (email, phone, ssn, etc.)"
     )
-    secrets_types_found: List[str] = Field(
-        default_factory=list,
-        description="Types of secrets detected (api_key, password, etc.)"
+    secrets_types_found: list[str] = Field(
+        default_factory=list, description="Types of secrets detected (api_key, password, etc.)"
     )
 
     content_redacted: bool = Field(
-        default=False,
-        description="Whether content was redacted before sending to LLM"
+        default=False, description="Whether content was redacted before sending to LLM"
     )
 
-    @validator('pii_types_found', 'secrets_types_found', pre=True, always=True)
+    @validator("pii_types_found", "secrets_types_found", pre=True, always=True)
     def ensure_list(cls, v):
         return v or []

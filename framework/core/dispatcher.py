@@ -27,23 +27,19 @@ Adapted from patterns in:
 """
 
 import asyncio
-import hashlib
 import logging
 import time
 import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
-from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Type, Union
+from typing import Any
 
 from framework.core.task import (
     Task,
-    TaskType,
-    TaskStatus,
-    TaskResult,
     TaskContext,
-    TaskPriority,
-    SubTask,
+    TaskResult,
+    TaskStatus,
+    TaskType,
     Workflow,
     WorkflowStep,
 )
@@ -54,6 +50,7 @@ logger = logging.getLogger(__name__)
 # =============================================================================
 # Dispatcher Configuration
 # =============================================================================
+
 
 @dataclass
 class DispatcherConfig:
@@ -84,20 +81,23 @@ class DispatcherConfig:
     log_results: bool = True
 
     # Agent defaults
-    default_agents: Dict[str, str] = field(default_factory=lambda: {
-        "planner": "PlannerAgent",
-        "executor": "ExecutorAgent",
-        "retriever": "RetrieverAgent",
-        "summarizer": "SummarizerAgent",
-        "entity": "EntityExtractionAgent",
-        "topic": "TopicAgent",
-        "concept": "ConceptAgent",
-    })
+    default_agents: dict[str, str] = field(
+        default_factory=lambda: {
+            "planner": "PlannerAgent",
+            "executor": "ExecutorAgent",
+            "retriever": "RetrieverAgent",
+            "summarizer": "SummarizerAgent",
+            "entity": "EntityExtractionAgent",
+            "topic": "TopicAgent",
+            "concept": "ConceptAgent",
+        }
+    )
 
 
 # =============================================================================
 # Agent Registry
 # =============================================================================
+
 
 class AgentRegistry:
     """
@@ -107,15 +107,15 @@ class AgentRegistry:
     """
 
     def __init__(self):
-        self._agents: Dict[str, Any] = {}
-        self._agent_classes: Dict[str, Type] = {}
+        self._agents: dict[str, Any] = {}
+        self._agent_classes: dict[str, type] = {}
         self._lock = asyncio.Lock()
 
-    def register(self, name: str, agent_class: Type) -> None:
+    def register(self, name: str, agent_class: type) -> None:
         """Register an agent class."""
         self._agent_classes[name] = agent_class
 
-    async def get(self, name: str, context: Optional[TaskContext] = None) -> Any:
+    async def get(self, name: str, context: TaskContext | None = None) -> Any:
         """Get or create an agent instance."""
         async with self._lock:
             cache_key = f"{name}:{context.tenant_id if context else 'default'}"
@@ -142,7 +142,7 @@ class AgentRegistry:
             self._agents[cache_key] = agent
             return agent
 
-    async def _import_agent(self, name: str) -> Optional[Type]:
+    async def _import_agent(self, name: str) -> type | None:
         """Dynamically import an agent by name."""
         agent_mapping = {
             "planner": ("agents", "PlannerAgent"),
@@ -168,13 +168,14 @@ class AgentRegistry:
 
         try:
             import importlib
+
             module = importlib.import_module(module_name)
             return getattr(module, class_name)
         except (ImportError, AttributeError) as e:
             logger.warning(f"Failed to import agent {name}: {e}")
             return None
 
-    def list_agents(self) -> List[str]:
+    def list_agents(self) -> list[str]:
         """List registered agent names."""
         return list(self._agent_classes.keys())
 
@@ -192,6 +193,7 @@ def get_agent_registry() -> AgentRegistry:
 # Result Cache
 # =============================================================================
 
+
 class ResultCache:
     """Cache for task results to enable idempotency."""
 
@@ -202,10 +204,10 @@ class ResultCache:
     ):
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
-        self._cache: Dict[str, Tuple[TaskResult, float]] = {}
+        self._cache: dict[str, tuple[TaskResult, float]] = {}
         self._lock = asyncio.Lock()
 
-    async def get(self, input_hash: str) -> Optional[TaskResult]:
+    async def get(self, input_hash: str) -> TaskResult | None:
         """Get cached result if available."""
         async with self._lock:
             if input_hash not in self._cache:
@@ -240,7 +242,7 @@ class ResultCache:
 # =============================================================================
 
 # Pre-defined workflows for common task types
-DEFAULT_WORKFLOWS: Dict[TaskType, Workflow] = {
+DEFAULT_WORKFLOWS: dict[TaskType, Workflow] = {
     TaskType.ASK_QUESTION: Workflow(
         name="answer_question",
         task_type=TaskType.ASK_QUESTION,
@@ -416,6 +418,7 @@ DEFAULT_WORKFLOWS: Dict[TaskType, Workflow] = {
 # Dispatcher Implementation
 # =============================================================================
 
+
 class Dispatcher:
     """
     Central task routing and orchestration engine.
@@ -435,22 +438,26 @@ class Dispatcher:
 
     def __init__(
         self,
-        config: Optional[DispatcherConfig] = None,
-        agent_registry: Optional[AgentRegistry] = None,
+        config: DispatcherConfig | None = None,
+        agent_registry: AgentRegistry | None = None,
     ):
         self.config = config or DispatcherConfig()
         self.agent_registry = agent_registry or get_agent_registry()
 
         # Workflow registry
-        self._workflows: Dict[TaskType, Workflow] = DEFAULT_WORKFLOWS.copy()
+        self._workflows: dict[TaskType, Workflow] = DEFAULT_WORKFLOWS.copy()
 
         # Result cache
-        self._result_cache = ResultCache(
-            ttl_seconds=self.config.cache_ttl_seconds,
-        ) if self.config.enable_result_cache else None
+        self._result_cache = (
+            ResultCache(
+                ttl_seconds=self.config.cache_ttl_seconds,
+            )
+            if self.config.enable_result_cache
+            else None
+        )
 
         # Task tracking
-        self._active_tasks: Dict[str, Task] = {}
+        self._active_tasks: dict[str, Task] = {}
         self._task_semaphore = asyncio.Semaphore(self.config.max_concurrent_tasks)
 
         # Statistics
@@ -473,11 +480,11 @@ class Dispatcher:
         self._workflows[workflow.task_type] = workflow
         logger.info(f"Registered workflow: {workflow.name} for {workflow.task_type.value}")
 
-    def get_workflow(self, task_type: TaskType) -> Optional[Workflow]:
+    def get_workflow(self, task_type: TaskType) -> Workflow | None:
         """Get workflow for a task type."""
         return self._workflows.get(task_type)
 
-    def list_workflows(self) -> List[str]:
+    def list_workflows(self) -> list[str]:
         """List registered workflow names."""
         return [w.name for w in self._workflows.values()]
 
@@ -574,13 +581,13 @@ class Dispatcher:
                 task.status = TaskStatus.COMPLETED if result.success else TaskStatus.FAILED
                 self._active_tasks.pop(task.id, None)
 
-    async def _check_cache(self, input_hash: str) -> Optional[TaskResult]:
+    async def _check_cache(self, input_hash: str) -> TaskResult | None:
         """Check for cached result."""
         if self._result_cache is None:
             return None
         return await self._result_cache.get(input_hash)
 
-    def _get_workflow_for_task(self, task: Task) -> Optional[Workflow]:
+    def _get_workflow_for_task(self, task: Task) -> Workflow | None:
         """Get the workflow for a task, considering overrides."""
         # Check for workflow override
         if task.workflow_override:
@@ -640,7 +647,7 @@ class Dispatcher:
                     # Retry with backoff
                     for attempt in range(step.max_retries):
                         try:
-                            await asyncio.sleep(self.config.retry_delay_seconds * (2 ** attempt))
+                            await asyncio.sleep(self.config.retry_delay_seconds * (2**attempt))
                             step_result = await self._execute_step(step, context, task.context)
                             if step.output_key:
                                 context[step.output_key] = step_result
@@ -675,7 +682,7 @@ class Dispatcher:
     async def _execute_step(
         self,
         step: WorkflowStep,
-        context: Dict[str, Any],
+        context: dict[str, Any],
         task_context: TaskContext,
     ) -> Any:
         """Execute a single workflow step."""
@@ -806,17 +813,17 @@ class Dispatcher:
             agents_invoked=[agent_type],
         )
 
-    def _evaluate_condition(self, condition: str, context: Dict[str, Any]) -> bool:
+    def _evaluate_condition(self, condition: str, context: dict[str, Any]) -> bool:
         """Evaluate a condition expression against context."""
         # Simple condition evaluation (could be expanded)
         try:
             # Support basic conditions like "key exists" or "key == value"
             if "==" in condition:
                 key, value = condition.split("==")
-                return str(context.get(key.strip(), "")) == value.strip().strip('"\'')
+                return str(context.get(key.strip(), "")) == value.strip().strip("\"'")
             elif "!=" in condition:
                 key, value = condition.split("!=")
-                return str(context.get(key.strip(), "")) != value.strip().strip('"\'')
+                return str(context.get(key.strip(), "")) != value.strip().strip("\"'")
             elif condition.startswith("has "):
                 key = condition[4:].strip()
                 return key in context and context[key]
@@ -831,9 +838,9 @@ class Dispatcher:
 
     async def dispatch_batch(
         self,
-        tasks: List[Task],
-        max_concurrent: Optional[int] = None,
-    ) -> List[TaskResult]:
+        tasks: list[Task],
+        max_concurrent: int | None = None,
+    ) -> list[TaskResult]:
         """
         Dispatch multiple tasks with controlled concurrency.
 
@@ -909,7 +916,7 @@ class Dispatcher:
         old_avg = self._stats["average_duration_ms"]
         self._stats["average_duration_ms"] = old_avg + (result.duration_ms - old_avg) / n
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get dispatcher statistics."""
         return {
             **self._stats,
@@ -917,7 +924,7 @@ class Dispatcher:
             "registered_workflows": list(self._workflows.keys()),
         }
 
-    def get_active_tasks(self) -> List[Dict[str, Any]]:
+    def get_active_tasks(self) -> list[dict[str, Any]]:
         """Get list of active tasks."""
         return [t.to_dict() for t in self._active_tasks.values()]
 
@@ -932,10 +939,10 @@ class Dispatcher:
 # =============================================================================
 
 # Global dispatcher instance
-_dispatcher: Optional[Dispatcher] = None
+_dispatcher: Dispatcher | None = None
 
 
-def get_dispatcher(config: Optional[DispatcherConfig] = None) -> Dispatcher:
+def get_dispatcher(config: DispatcherConfig | None = None) -> Dispatcher:
     """Get or create the global dispatcher."""
     global _dispatcher
 
@@ -959,7 +966,7 @@ async def dispatch_task(task: Task) -> TaskResult:
 
 async def dispatch_question(
     question: str,
-    tenant_id: Optional[str] = None,
+    tenant_id: str | None = None,
     **kwargs,
 ) -> TaskResult:
     """Convenience function to dispatch a question task."""
@@ -972,7 +979,7 @@ async def dispatch_question(
 async def dispatch_document(
     content: str,
     source: str = "user_upload",
-    tenant_id: Optional[str] = None,
+    tenant_id: str | None = None,
     analyze: bool = True,
     **kwargs,
 ) -> TaskResult:
@@ -991,8 +998,8 @@ async def dispatch_document(
 
 async def dispatch_plan(
     goal: str,
-    constraints: Optional[List[str]] = None,
-    tenant_id: Optional[str] = None,
+    constraints: list[str] | None = None,
+    tenant_id: str | None = None,
     execute: bool = False,
     **kwargs,
 ) -> TaskResult:
