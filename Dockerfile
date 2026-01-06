@@ -25,6 +25,11 @@ RUN pip install --no-cache-dir --upgrade pip && \
 # Copy project
 COPY . .
 
+# Create a non-root user and switch to it
+RUN useradd -m -u 1000 appuser && \
+    chown -R appuser:appuser /app
+USER appuser
+
 # Expose the port the app runs on
 EXPOSE 8000
 

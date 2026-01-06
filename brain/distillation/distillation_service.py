@@ -272,7 +272,7 @@ class TopicExtractionService:
                         }
                     ]
             except Exception:
-                pass
+                logger.exception("KeyBERT topic extraction failed; falling back to heuristic.")
 
         # Heuristic
         import collections
