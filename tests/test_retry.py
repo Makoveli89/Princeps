@@ -1,17 +1,19 @@
 import pytest
-import asyncio
-import time
+
 from framework.utilities.retry import async_retry
+
 
 @pytest.mark.asyncio
 async def test_async_retry_success():
     """Test that the function returns correctly on success."""
+
     @async_retry(tries=3, delay=0.01)
     async def successful_func():
         return "success"
 
     result = await successful_func()
     assert result == "success"
+
 
 @pytest.mark.asyncio
 async def test_async_retry_eventually_succeeds():
@@ -31,6 +33,7 @@ async def test_async_retry_eventually_succeeds():
     result = await flaky_func()
     assert result == "success"
     assert attempts == 3
+
 
 @pytest.mark.asyncio
 async def test_async_retry_fails():

@@ -1,6 +1,7 @@
-from typing import Any, Dict
+from typing import Any
 
-def deep_merge(target: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]:
+
+def deep_merge(target: dict[str, Any], source: dict[str, Any]) -> dict[str, Any]:
     """
     Recursively merges source dictionary into target dictionary.
 
@@ -15,7 +16,8 @@ def deep_merge(target: Dict[str, Any], source: Dict[str, Any]) -> Dict[str, Any]
             target[key] = value
     return target
 
-def merge_configs(*configs: Dict[str, Any]) -> Dict[str, Any]:
+
+def merge_configs(*configs: dict[str, Any]) -> dict[str, Any]:
     """
     Merge multiple configuration dictionaries in order.
     Later configurations overwrite earlier ones.

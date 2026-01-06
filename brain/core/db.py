@@ -375,7 +375,8 @@ def similarity_search_chunks(
     # Convert embedding to PostgreSQL array format
     embedding_str = "[" + ",".join(str(x) for x in query_embedding) + "]"
 
-    query = text("""
+    query = text(
+        """
         SELECT id, document_id, content,
                1 - (embedding <=> :embedding::vector) as similarity
         FROM doc_chunks
@@ -384,7 +385,8 @@ def similarity_search_chunks(
           AND (:document_id IS NULL OR document_id = :document_id::uuid)
         ORDER BY embedding <=> :embedding::vector
         LIMIT :limit
-    """)
+    """
+    )
 
     result = session.execute(
         query,

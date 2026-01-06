@@ -25,6 +25,7 @@ from framework.skills.resolver import SkillResolver
 
 load_dotenv()  # Load .env file
 
+
 # Initialize Database on Startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
