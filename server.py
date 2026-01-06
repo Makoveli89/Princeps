@@ -1,26 +1,34 @@
 import os
+
 from dotenv import load_dotenv
+
 load_dotenv()  # Load .env file
-import uuid
 import datetime
-import asyncio
+import logging
+import re
 import sys
-import logging
-import time
-from typing import List, Optional, Dict, Any
+import uuid
 from contextlib import asynccontextmanager
-import logging
+from typing import Any
 
 import structlog
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Request
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
+from pydantic import BaseModel, field_validator
 from slowapi import Limiter, _rate_limit_exceeded_handler
-from slowapi.util import get_remote_address
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
-from pydantic import BaseModel
-from sqlalchemy import func, desc, text
+from slowapi.util import get_remote_address
+from sqlalchemy import desc
 
 # --- Structlog Configuration ---
 
@@ -49,29 +57,30 @@ structlog.configure(
 logger = structlog.get_logger()
 
 # Princeps Imports
-from brain.core.db import get_engine, init_db, get_session
-from brain.core.models import Tenant, AgentRun, Document, KnowledgeNode, Resource, DocChunk, OperationStatusEnum, Operation
-from framework.agents.base_agent import BaseAgent, AgentConfig, AgentTask, LLMProvider
-from framework.agents.example_agent import SummarizationAgent
-from framework.llms.multi_llm_client import MultiLLMClient
-
-# Skills
-from framework.skills.resolver import SkillResolver
-from framework.skills.registry import get_registry
 # Import library to register skills
-import framework.skills.library.code_review
-import framework.skills.library.research
+from brain.core.db import get_engine, get_session, init_db
+from brain.core.models import (
+    AgentRun,
+    DocChunk,
+    Document,
+    KnowledgeNode,
+    Tenant,
+)
+from framework.agents.example_agent import SummarizationAgent
 
 # New Services
 from framework.ingestion.service import IngestionService
+from framework.llms.multi_llm_client import MultiLLMClient
 from framework.retrieval.vector_search import (
+    PgVectorIndex,
+    create_sqlite_index,  # Import the factory function
     get_embedding_service,
     query_vector_index,
-    PgVectorIndex,
-    create_sqlite_index, # Import the factory function
-    VectorSearchConfig,
-    VectorSearchResult
 )
+from framework.skills.registry import get_registry
+
+# Skills
+from framework.skills.resolver import SkillResolver
 
 # Initialize Logger
 logging.basicConfig(level=logging.INFO)
@@ -89,7 +98,7 @@ async def lifespan(app: FastAPI):
         init_db(engine)
         logger.info("database_initialized")
     except Exception as e:
-        logger.error("database_initialization_failed", error=str(e))
+        logger.error(f"database_initialization_failed: {e}")
 
     yield
     # Cleanup if needed
@@ -129,17 +138,37 @@ class CreateWorkspaceRequest(BaseModel):
     name: str
     description: str
 
+    @field_validator('name')
+    def validate_name(cls, v):
+        if len(v) > 50:
+            raise ValueError('Name must be 50 characters or less')
+        if not re.match(r'^[a-zA-Z0-9 _-]+$', v):
+            raise ValueError('Name must contain only alphanumeric characters, spaces, dashes, or underscores')
+        return v
+
+    @field_validator('description')
+    def validate_description(cls, v):
+        if len(v) > 200:
+            raise ValueError('Description must be 200 characters or less')
+        return v
+
 class AgentDTO(BaseModel):
     id: str
     name: str
     role: str
     status: str
-    capabilities: List[str]
+    capabilities: list[str]
 
 class RunRequest(BaseModel):
     agentId: str # For now this maps to a hardcoded agent type or ID
     input: str
     workspaceId: str
+
+    @field_validator('input')
+    def validate_input(cls, v):
+        if len(v) > 100000: # 100KB limit for input text
+            raise ValueError('Input text is too long (max 100,000 characters)')
+        return v
 
 class SkillRunRequest(BaseModel):
     query: str
@@ -172,7 +201,7 @@ class RunLogDTO(BaseModel):
     output_preview: str
     duration_ms: int
     workspace_id: str
-    logs: List[str]
+    logs: list[str]
 
 # --- Helper: Dependency for DB Session ---
 def get_db():
@@ -181,7 +210,7 @@ def get_db():
             yield session
     except Exception as e:
         # Yield None if DB is down, to allow fallback logic in endpoints
-        logger.error("db_connection_failed", error=str(e))
+        logger.error(f"db_connection_failed: {e}")
         yield None
 
 # --- Helper: Fake Agent Manager ---
@@ -198,7 +227,7 @@ class AgentManager:
         self.llm_client = MultiLLMClient()
         self.skill_resolver = SkillResolver(llm_client=self.llm_client)
 
-    def get_agents(self) -> List[AgentDTO]:
+    def get_agents(self) -> list[AgentDTO]:
         return [
             AgentDTO(
                 id=a.agent_id,
@@ -210,7 +239,7 @@ class AgentManager:
             for a in self.available_agents
         ]
 
-    async def run_agent(self, agent_id: str, prompt: str, workspace_id: str) -> Dict[str, Any]:
+    async def run_agent(self, agent_id: str, prompt: str, workspace_id: str) -> dict[str, Any]:
         # Find agent by ID or Type
         # Ideally we persist agents in DB, but for now we look up in our list
         # or create a new transient one.
@@ -236,7 +265,7 @@ class AgentManager:
 
         return response.to_dict()
 
-    async def run_skill(self, query: str, workspace_id: str) -> Dict[str, Any]:
+    async def run_skill(self, query: str, workspace_id: str) -> dict[str, Any]:
         """
         Resolve and execute a skill based on natural language query.
         """
@@ -298,7 +327,7 @@ def get_stats(db=Depends(get_db)):
         knowledgeNodes=node_count
     )
 
-@app.get("/api/workspaces", response_model=List[WorkspaceDTO])
+@app.get("/api/workspaces", response_model=list[WorkspaceDTO])
 def get_workspaces(db=Depends(get_db)):
     if db is None:
         # Return empty list if DB is down, rather than 500
@@ -359,7 +388,7 @@ def create_workspace(req: CreateWorkspaceRequest, db=Depends(get_db)):
         runCount=0
     )
 
-@app.get("/api/agents", response_model=List[AgentDTO])
+@app.get("/api/agents", response_model=list[AgentDTO])
 def get_agents():
     return agent_manager.get_agents()
 
@@ -418,7 +447,7 @@ async def ingest_document(
     )
     return result
 
-@app.get("/api/search", response_model=List[SearchResultDTO])
+@app.get("/api/search", response_model=list[SearchResultDTO])
 @limiter.limit("20/minute")
 async def search_knowledge(
     request: Request,
@@ -435,7 +464,6 @@ async def search_knowledge(
     query_vector = await emb_service.embed_text(q)
 
     # Initialize Vector Index based on Environment
-    import os
     db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
 
     if db_url.startswith("sqlite"):
@@ -468,7 +496,7 @@ async def search_knowledge(
 
     return dtos
 
-@app.get("/api/metrics", response_model=List[MetricPoint])
+@app.get("/api/metrics", response_model=list[MetricPoint])
 def get_metrics(db=Depends(get_db)):
     """
     Aggregate AgentRun success/failures over last 24h by 4h buckets.
@@ -514,8 +542,8 @@ def get_metrics(db=Depends(get_db)):
 
     return result
 
-@app.get("/api/runs", response_model=List[RunLogDTO])
-def get_runs(workspaceId: Optional[str] = None, limit: int = 50, db=Depends(get_db)):
+@app.get("/api/runs", response_model=list[RunLogDTO])
+def get_runs(workspaceId: str | None = None, limit: int = 50, db=Depends(get_db)):
     if db is None:
         return []
 
