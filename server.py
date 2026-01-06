@@ -4,14 +4,44 @@ load_dotenv()  # Load .env file
 import uuid
 import datetime
 import asyncio
+import sys
+import logging
+import time
 from typing import List, Optional, Dict, Any
 from contextlib import asynccontextmanager
 
+import structlog
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Request
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from sqlalchemy import func, desc, text
+
+# --- Structlog Configuration ---
+
+# Configure standard logging to intercept basic logs
+logging.basicConfig(format="%(message)s", stream=sys.stdout, level=logging.INFO)
+
+structlog.configure(
+    processors=[
+        structlog.contextvars.merge_contextvars,
+        structlog.stdlib.filter_by_level,
+        structlog.stdlib.add_logger_name,
+        structlog.stdlib.add_log_level,
+        structlog.stdlib.PositionalArgumentsFormatter(),
+        structlog.processors.TimeStamper(fmt="iso"),
+        structlog.processors.StackInfoRenderer(),
+        structlog.processors.format_exc_info,
+        structlog.processors.UnicodeDecoder(),
+        structlog.processors.JSONRenderer()
+    ],
+    context_class=dict,
+    logger_factory=structlog.stdlib.LoggerFactory(),
+    wrapper_class=structlog.stdlib.BoundLogger,
+    cache_logger_on_first_use=True,
+)
+
+logger = structlog.get_logger()
 
 # Princeps Imports
 from brain.core.db import get_engine, init_db, get_session
@@ -48,14 +78,45 @@ async def lifespan(app: FastAPI):
         # unconditionally, but for "easy set up" it's helpful.
         # It handles "IF NOT EXISTS" internally.
         init_db(engine)
-        print("✅ Database initialized.")
+        logger.info("database_initialized")
     except Exception as e:
-        print(f"❌ Database initialization failed. Ensure Postgres is running. Error: {e}")
+        logger.error("database_initialization_failed", error=str(e))
 
     yield
     # Cleanup if needed
 
 app = FastAPI(title="Princeps Console Backend", version="0.1.0", lifespan=lifespan)
+
+# Logging Middleware
+@app.middleware("http")
+async def logging_middleware(request: Request, call_next):
+    request_id = request.headers.get("X-Request-ID", str(uuid.uuid4()))
+    structlog.contextvars.clear_contextvars()
+    structlog.contextvars.bind_contextvars(
+        request_id=request_id,
+        method=request.method,
+        path=request.url.path,
+    )
+
+    start_time = time.perf_counter()
+    try:
+        response = await call_next(request)
+        process_time = time.perf_counter() - start_time
+
+        logger.info(
+            "request_processed",
+            status_code=response.status_code,
+            process_time=process_time
+        )
+        return response
+    except Exception as e:
+        process_time = time.perf_counter() - start_time
+        logger.error(
+            "request_failed",
+            error=str(e),
+            process_time=process_time
+        )
+        raise
 
 # Enable CORS for local development
 app.add_middleware(
@@ -135,7 +196,7 @@ def get_db():
             yield session
     except Exception as e:
         # Yield None if DB is down, to allow fallback logic in endpoints
-        print(f"DB Connection failed: {e}")
+        logger.error("db_connection_failed", error=str(e))
         yield None
 
 # --- Helper: Fake Agent Manager ---
@@ -292,7 +353,7 @@ def get_workspaces(db=Depends(get_db)):
             ))
         return result
     except Exception as e:
-        print(f"Error fetching workspaces: {e}")
+        logger.error("fetching_workspaces_failed", error=str(e))
         return []
 
 @app.post("/api/workspaces", response_model=WorkspaceDTO)
@@ -348,7 +409,7 @@ async def run_agent(request: RunRequest):
         }
     except Exception as e:
         error_id = str(uuid.uuid4())
-        print(f"Agent run failed [ID: {error_id}]: {e}")
+        logger.error("agent_run_failed", error_id=error_id, error=str(e))
         # SENTINEL FIX: Prevent information leakage by hiding internal error details
         raise HTTPException(status_code=500, detail=f"Internal server error. Error ID: {error_id}")
 
@@ -362,7 +423,7 @@ async def execute_skill(request: SkillRunRequest):
         return result
     except Exception as e:
         error_id = str(uuid.uuid4())
-        print(f"Skill execution failed [ID: {error_id}]: {e}")
+        logger.error("skill_execution_failed", error_id=error_id, error=str(e))
         # SENTINEL FIX: Prevent information leakage by hiding internal error details
         raise HTTPException(status_code=500, detail=f"Internal server error. Error ID: {error_id}")
 
@@ -435,8 +496,7 @@ async def search_knowledge(
         return dtos
 
     except Exception as e:
-        print(f"Search failed: {e}")
-        # logger.error(f"Search failed: {e}")
+        logger.error("search_failed", error=str(e))
         # Return empty list on failure gracefully for UI? Or raise?
         # Let's raise for visibility
         raise HTTPException(status_code=500, detail=str(e))
@@ -488,7 +548,7 @@ def get_metrics(db=Depends(get_db)):
 
         return result
     except Exception as e:
-        print(f"Error fetching metrics: {e}")
+        logger.error("fetching_metrics_failed", error=str(e))
         return []
 
 @app.get("/api/runs", response_model=List[RunLogDTO])
@@ -519,7 +579,7 @@ def get_runs(workspaceId: Optional[str] = None, limit: int = 50, db=Depends(get_
             ))
         return dtos
     except Exception as e:
-        print(f"Error fetching runs: {e}")
+        logger.error("fetching_runs_failed", error=str(e))
         return []
 
 if __name__ == "__main__":
