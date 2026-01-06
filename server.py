@@ -347,8 +347,10 @@ async def run_agent(request: RunRequest):
             "full_result": result
         }
     except Exception as e:
-        print(f"Agent run failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_id = str(uuid.uuid4())
+        print(f"Agent run failed [ID: {error_id}]: {e}")
+        # SENTINEL FIX: Prevent information leakage by hiding internal error details
+        raise HTTPException(status_code=500, detail=f"Internal server error. Error ID: {error_id}")
 
 @app.post("/api/skills/execute")
 async def execute_skill(request: SkillRunRequest):
@@ -359,8 +361,10 @@ async def execute_skill(request: SkillRunRequest):
         result = await agent_manager.run_skill(request.query, request.workspaceId)
         return result
     except Exception as e:
-        print(f"Skill execution failed: {e}")
-        raise HTTPException(status_code=500, detail=str(e))
+        error_id = str(uuid.uuid4())
+        print(f"Skill execution failed [ID: {error_id}]: {e}")
+        # SENTINEL FIX: Prevent information leakage by hiding internal error details
+        raise HTTPException(status_code=500, detail=f"Internal server error. Error ID: {error_id}")
 
 # --- New Endpoints ---
 
