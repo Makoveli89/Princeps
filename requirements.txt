@@ -1,5 +1,8 @@
 # Princeps Brain Layer Dependencies
 # ==================================
+# NOTE: For Docker builds, use requirements.lock which contains pinned versions
+# for security and reproducibility. This file contains version ranges for
+# development flexibility.
 
 # Core
 sqlalchemy>=2.0
