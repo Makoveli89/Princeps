@@ -18,9 +18,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 # Install python dependencies
-COPY requirements.txt .
-RUN pip install --no-cache-dir --upgrade pip && \
-    pip install --no-cache-dir -r requirements.txt
+# Use pinned requirements for reproducible builds and supply-chain security
+COPY requirements.lock .
+RUN pip install --no-cache-dir --upgrade pip==25.0.0 && \
+    pip install --no-cache-dir -r requirements.lock
 
 # Copy project
 COPY . .
