@@ -5,6 +5,15 @@
 sqlalchemy>=2.0
 psycopg2-binary
 pgvector
+fastapi
+uvicorn
+gunicorn
+pydantic
+structlog
+numpy
+python-multipart
+python-dotenv
+slowapi
 
 # Embeddings & ML
 sentence-transformers
@@ -27,7 +36,9 @@ pypdf
 supabase
 alembic
 streamlit
+streamlit-extras
 pypdf
 python-multipart
 python-dotenv
 slowapi
+httpx

@@ -11,15 +11,8 @@ from typing import Any
 
 import structlog
 import uvicorn
-from fastapi import (
-    Depends,
-    FastAPI,
-    File,
-    Form,
-    HTTPException,
-    Request,
-    UploadFile,
-)
+from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Request
+from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
@@ -120,6 +113,43 @@ app.add_middleware(
 )
 
 app.add_middleware(SlowAPIMiddleware)
+
+# --- Global Exception Handler ---
+
+@app.exception_handler(Exception)
+async def global_exception_handler(request: Request, exc: Exception):
+    """
+    Global exception handler to catch unhandled exceptions, log them securely,
+    and return a generic error message to the client.
+    """
+    try:
+        error_id = str(uuid.uuid4())
+        # Safe logging even if request object is malformed or logger fails
+        path = getattr(request.url, "path", "unknown")
+        method = getattr(request, "method", "unknown")
+
+        # structlog binded logger might expect kwargs, but if not bound, it might differ.
+        # However, structlog.get_logger() returns a bound logger usually.
+        # The error `Logger._log() got an unexpected keyword argument 'error_id'` suggests
+        # that `logger` might be a standard logging.Logger instance in some context?
+        # In server.py: logger = structlog.get_logger()
+        # BUT later: logger = logging.getLogger(__name__)  <-- THIS IS THE ISSUE.
+
+        # We should use the structlog logger.
+        struct_logger = structlog.get_logger()
+        struct_logger.error("unhandled_exception", error_id=error_id, error=str(exc), path=path, method=method)
+
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Internal server error. Error ID: {error_id}"},
+        )
+    except Exception as e:
+        # Fallback if the handler itself fails
+        print(f"Error in global exception handler: {e}")
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Internal server error (handler failed)."},
+        )
 
 # --- Types ---
 
