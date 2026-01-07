@@ -126,6 +126,9 @@ except ImportError:
 # Now import models (after patching)
 from brain.core.models import Base, Tenant, Document, DocChunk, Operation, OperationTypeEnum, OperationStatusEnum
 
+# Import httpx for async API testing
+from httpx import AsyncClient, ASGITransport
+
 
 @pytest.fixture(scope="session")
 def engine():
@@ -156,6 +159,18 @@ def session(engine):
     session.close()
     transaction.rollback()
     connection.close()
+
+
+@pytest.fixture(scope="function")
+async def async_client():
+    """Create an async client for the FastAPI app."""
+    # Import inside fixture to avoid circular imports or early initialization issues
+    from server import app
+
+    # Create the client
+    transport = ASGITransport(app=app)
+    async with AsyncClient(transport=transport, base_url="http://test") as client:
+        yield client
 
 
 @pytest.fixture
