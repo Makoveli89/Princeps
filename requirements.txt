@@ -30,3 +30,4 @@ streamlit
 pypdf
 python-multipart
 python-dotenv
+slowapi
