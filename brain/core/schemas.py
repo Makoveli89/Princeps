@@ -108,7 +108,9 @@ class DecisionType(str, Enum):
 
 # Base Schemas
 class BaseSchema(BaseModel):
-    model_config = ConfigDict(from_attributes=True, populate_by_name=True, str_strip_whitespace=True)
+    model_config = ConfigDict(
+        from_attributes=True, populate_by_name=True, str_strip_whitespace=True
+    )
 
 
 class TimestampMixin(BaseModel):

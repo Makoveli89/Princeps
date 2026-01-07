@@ -5,15 +5,16 @@ A skill that performs a comprehensive code review on a provided snippet or file.
 Simulates the 'github-code-review' skill from claude-flow.
 """
 
-from typing import Any, Dict, List
+from typing import Any
+
+from framework.agents.base_agent import LLMProvider
+from framework.llms.multi_llm_client import MultiLLMClient
 from framework.skills.base_skill import BaseSkill
 from framework.skills.registry import register_skill
-from framework.agents.base_agent import create_agent, AgentConfig, LLMProvider
-from framework.agents.example_agent import SummarizationAgent # We can reuse or create a specialized one
-from framework.llms.multi_llm_client import MultiLLMClient
 
 # We will create a specialized agent on the fly or reuse one.
 # For this example, let's use the MultiLLMClient directly or a generic agent.
+
 
 @register_skill
 class CodeReviewSkill(BaseSkill):
@@ -27,25 +28,25 @@ class CodeReviewSkill(BaseSkill):
         return "Reviews code for security issues, bugs, and best practices."
 
     @property
-    def parameters(self) -> Dict[str, Any]:
+    def parameters(self) -> dict[str, Any]:
         return {
             "type": "object",
             "properties": {
                 "code": {
                     "type": "string",
-                    "description": "The code snippet or file content to review."
+                    "description": "The code snippet or file content to review.",
                 },
                 "focus": {
                     "type": "string",
                     "description": "Specific area to focus on (e.g., 'security', 'performance', 'style').",
                     "enum": ["security", "performance", "style", "general"],
-                    "default": "general"
-                }
+                    "default": "general",
+                },
             },
-            "required": ["code"]
+            "required": ["code"],
         }
 
-    async def execute(self, **kwargs) -> Dict[str, Any]:
+    async def execute(self, **kwargs) -> dict[str, Any]:
         code = kwargs.get("code")
         focus = kwargs.get("focus", "general")
 
@@ -74,13 +75,9 @@ Identify potential bugs, security vulnerabilities, and improvements.
         # Call LLM
         response = await llm_client.generate(
             prompt=prompt,
-            provider=LLMProvider.ANTHROPIC, # Claude is good for code
-            model="claude-3-5-sonnet-20241022", # Hardcoded for now, or use config
-            temperature=0.2
+            provider=LLMProvider.ANTHROPIC,  # Claude is good for code
+            model="claude-3-5-sonnet-20241022",  # Hardcoded for now, or use config
+            temperature=0.2,
         )
 
-        return {
-            "status": "completed",
-            "review": response["text"],
-            "focus": focus
-        }
+        return {"status": "completed", "review": response["text"], "focus": focus}

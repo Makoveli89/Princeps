@@ -16,13 +16,13 @@ Usage:
 """
 
 from framework.agents import BaseAgent
-from framework.core import Task, TaskType, Dispatcher
+from framework.core import Dispatcher, Task, TaskType
 from framework.llms import MultiLLMClient
 
 __all__ = [
     "BaseAgent",
     "Task",
-    "TaskType", 
+    "TaskType",
     "Dispatcher",
     "MultiLLMClient",
 ]

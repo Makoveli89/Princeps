@@ -32,28 +32,28 @@ Adapted from patterns in:
 - retry_manager.py and error_handler.py (resilience utilities)
 """
 
-import os
+import asyncio
 import json
 import logging
-import asyncio
 import time
 import uuid
 from abc import ABC, abstractmethod
+from collections.abc import Callable
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Union, TypeVar, Generic
+from typing import Any
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 class TaskStatus(Enum):
     """Status of an agent task"""
+
     PENDING = "pending"
     IN_PROGRESS = "in_progress"
     COMPLETED = "completed"
@@ -64,6 +64,7 @@ class TaskStatus(Enum):
 
 class LLMProvider(Enum):
     """Supported LLM providers"""
+
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     GOOGLE = "google"
@@ -78,7 +79,9 @@ class AgentConfig:
 
     # LLM settings
     primary_llm: LLMProvider = LLMProvider.ANTHROPIC
-    fallback_llms: List[LLMProvider] = field(default_factory=lambda: [LLMProvider.OPENAI, LLMProvider.GOOGLE])
+    fallback_llms: list[LLMProvider] = field(
+        default_factory=lambda: [LLMProvider.OPENAI, LLMProvider.GOOGLE]
+    )
 
     # Retry settings (adapted from retry_manager.py patterns)
     max_retries: int = 3
@@ -99,7 +102,7 @@ class AgentConfig:
     log_prompts: bool = True
     log_responses: bool = True
     log_to_file: bool = False
-    log_file_path: Optional[str] = None
+    log_file_path: str | None = None
 
     # Brain Layer integration
     enable_brain_logging: bool = True
@@ -116,12 +119,14 @@ class AgentConfig:
     batch_size: int = 5
 
     # Model preferences per provider
-    model_preferences: Dict[str, str] = field(default_factory=lambda: {
-        "anthropic": "claude-3-5-sonnet-20241022",
-        "openai": "gpt-4-turbo-preview",
-        "google": "gemini-pro",
-        "meta": "codellama/CodeLlama-7b-Python-hf",
-    })
+    model_preferences: dict[str, str] = field(
+        default_factory=lambda: {
+            "anthropic": "claude-3-5-sonnet-20241022",
+            "openai": "gpt-4-turbo-preview",
+            "google": "gemini-pro",
+            "meta": "codellama/CodeLlama-7b-Python-hf",
+        }
+    )
 
     # Default generation parameters
     default_temperature: float = 0.7
@@ -137,14 +142,15 @@ class AgentContext:
     This is attached to every run to ensure proper data isolation
     and traceability in multi-tenant environments.
     """
-    tenant_id: Optional[str] = None
-    user_id: Optional[str] = None
-    session_id: Optional[str] = None
-    correlation_id: Optional[str] = None
-    environment: str = "development"
-    metadata: Dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    tenant_id: str | None = None
+    user_id: str | None = None
+    session_id: str | None = None
+    correlation_id: str | None = None
+    environment: str = "development"
+    metadata: dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> dict[str, Any]:
         return {
             "tenant_id": self.tenant_id,
             "user_id": self.user_id,
@@ -165,32 +171,32 @@ class AgentTask:
 
     # Input data
     prompt: str = ""
-    messages: List[Dict[str, str]] = field(default_factory=list)
-    context: Optional[str] = None
-    system_prompt: Optional[str] = None
+    messages: list[dict[str, str]] = field(default_factory=list)
+    context: str | None = None
+    system_prompt: str | None = None
 
     # Task configuration
-    parameters: Dict[str, Any] = field(default_factory=dict)
+    parameters: dict[str, Any] = field(default_factory=dict)
     intents: set = field(default_factory=set)
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
     # Routing preferences
-    preferred_llm: Optional[LLMProvider] = None
-    required_capabilities: List[str] = field(default_factory=list)
+    preferred_llm: LLMProvider | None = None
+    required_capabilities: list[str] = field(default_factory=list)
 
     # Tenant context
-    agent_context: Optional[AgentContext] = None
+    agent_context: AgentContext | None = None
 
     # Timing
     created_at: datetime = field(default_factory=datetime.now)
-    started_at: Optional[datetime] = None
-    completed_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    completed_at: datetime | None = None
 
     # Status
     status: TaskStatus = TaskStatus.PENDING
     retry_count: int = 0
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert task to dictionary"""
         return {
             "task_id": self.task_id,
@@ -224,10 +230,10 @@ class AgentResponse:
 
     # Response content
     response_text: str = ""
-    structured_output: Optional[Dict[str, Any]] = None
+    structured_output: dict[str, Any] | None = None
 
     # LLM metadata
-    llm_provider: Optional[LLMProvider] = None
+    llm_provider: LLMProvider | None = None
     model_used: str = ""
 
     # Quality metrics
@@ -243,20 +249,20 @@ class AgentResponse:
     timestamp: datetime = field(default_factory=datetime.now)
 
     # Error handling
-    error: Optional[str] = None
-    error_type: Optional[str] = None
+    error: str | None = None
+    error_type: str | None = None
     retry_count: int = 0
     fallback_used: bool = False
 
     # Audit trail
-    execution_log: List[Dict[str, Any]] = field(default_factory=list)
-    run_id: Optional[str] = None  # Brain Layer run ID for traceability
+    execution_log: list[dict[str, Any]] = field(default_factory=list)
+    run_id: str | None = None  # Brain Layer run ID for traceability
 
     # PII scan results
     pii_detected: bool = False
-    pii_types: List[str] = field(default_factory=list)
+    pii_types: list[str] = field(default_factory=list)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert response to dictionary"""
         return {
             "task_id": self.task_id,
@@ -313,11 +319,11 @@ class BaseAgent(ABC):
         self,
         agent_name: str,
         agent_type: str,
-        config: Optional[AgentConfig] = None,
+        config: AgentConfig | None = None,
         llm_client=None,  # MultiLLMClient instance
         brain_logger=None,  # BrainLogger instance
         security_scanner=None,  # SecurityScanner instance
-        default_context: Optional[AgentContext] = None,
+        default_context: AgentContext | None = None,
     ):
         """
         Initialize the base agent.
@@ -350,9 +356,9 @@ class BaseAgent(ABC):
 
         # Agent state
         self.initialized = False
-        self.capabilities: List[str] = []
-        self.active_tasks: Dict[str, AgentTask] = {}
-        self.task_history: List[AgentResponse] = []
+        self.capabilities: list[str] = []
+        self.active_tasks: dict[str, AgentTask] = {}
+        self.task_history: list[AgentResponse] = []
 
         # Performance metrics
         self.total_requests = 0
@@ -363,15 +369,17 @@ class BaseAgent(ABC):
         self.total_tokens_used = 0
 
         # Logging hooks (in addition to Brain Layer logging)
-        self._log_hooks: List[Callable[[Dict[str, Any]], None]] = []
+        self._log_hooks: list[Callable[[dict[str, Any]], None]] = []
 
         # Response cache
-        self._cache: Dict[str, AgentResponse] = {}
+        self._cache: dict[str, AgentResponse] = {}
 
         # Initialize agent
         self._initialize()
 
-        logger.info(f"Agent '{self.agent_name}' ({self.agent_type}) initialized with ID {self.agent_id}")
+        logger.info(
+            f"Agent '{self.agent_name}' ({self.agent_type}) initialized with ID {self.agent_id}"
+        )
 
     def _init_brain_logger(self):
         """Initialize Brain Layer logger"""
@@ -381,6 +389,7 @@ class BaseAgent(ABC):
         if self._brain_logger is None:
             try:
                 from framework.agents.brain_logger import get_brain_logger
+
                 self._brain_logger = get_brain_logger()
                 logger.info("Brain logger initialized")
             except Exception as e:
@@ -395,6 +404,7 @@ class BaseAgent(ABC):
         if self._security_scanner is None:
             try:
                 from brain.security.security_scanner import SecurityScanner
+
                 self._security_scanner = SecurityScanner()
                 logger.info("Security scanner initialized")
             except Exception as e:
@@ -411,7 +421,7 @@ class BaseAgent(ABC):
             self.initialized = False
 
     @abstractmethod
-    def _initialize_capabilities(self) -> List[str]:
+    def _initialize_capabilities(self) -> list[str]:
         """
         Initialize and return agent-specific capabilities.
 
@@ -434,11 +444,7 @@ class BaseAgent(ABC):
         pass
 
     @abstractmethod
-    def _process_response(
-        self,
-        raw_response: str,
-        task: AgentTask
-    ) -> Dict[str, Any]:
+    def _process_response(self, raw_response: str, task: AgentTask) -> dict[str, Any]:
         """
         Process and validate the raw LLM response.
 
@@ -475,7 +481,7 @@ class BaseAgent(ABC):
         self.default_context = context
         logger.info(f"Agent context set: tenant_id={context.tenant_id}")
 
-    def add_log_hook(self, hook: Callable[[Dict[str, Any]], None]):
+    def add_log_hook(self, hook: Callable[[dict[str, Any]], None]):
         """
         Add a logging hook for auditing and learning.
 
@@ -484,7 +490,7 @@ class BaseAgent(ABC):
         """
         self._log_hooks.append(hook)
 
-    def _log_event(self, event_type: str, data: Dict[str, Any], run_id: Optional[str] = None):
+    def _log_event(self, event_type: str, data: dict[str, Any], run_id: str | None = None):
         """
         Log an event and trigger hooks.
 
@@ -530,7 +536,7 @@ class BaseAgent(ABC):
             except Exception as e:
                 logger.warning(f"Failed to write log to file: {e}")
 
-    def _scan_for_pii(self, content: str) -> Dict[str, Any]:
+    def _scan_for_pii(self, content: str) -> dict[str, Any]:
         """
         Scan content for PII and secrets.
 
@@ -580,7 +586,7 @@ class BaseAgent(ABC):
         key_data = f"{task.prompt}:{task.system_prompt}:{task.task_type}"
         return f"cache_{hash(key_data) % 10**10}"
 
-    def _check_cache(self, task: AgentTask) -> Optional[AgentResponse]:
+    def _check_cache(self, task: AgentTask) -> AgentResponse | None:
         """Check if a cached response exists for this task"""
         if not self.config.enable_caching:
             return None
@@ -616,8 +622,8 @@ class BaseAgent(ABC):
             AgentResponse with results or error information
         """
         start_time = time.time()
-        execution_log: List[Dict[str, Any]] = []
-        run_id: Optional[str] = None
+        execution_log: list[dict[str, Any]] = []
+        run_id: str | None = None
 
         # Merge default context with task context
         if task.agent_context is None and self.default_context:
@@ -683,11 +689,15 @@ class BaseAgent(ABC):
 
                 # Block on secrets if configured
                 if pii_scan_result.get("has_secrets") and self.config.block_on_secrets:
-                    self._log_event("security_block", {
-                        "task_id": task.task_id,
-                        "reason": "Secrets detected in content",
-                        "secret_types": pii_scan_result.get("secret_types", []),
-                    }, run_id)
+                    self._log_event(
+                        "security_block",
+                        {
+                            "task_id": task.task_id,
+                            "reason": "Secrets detected in content",
+                            "secret_types": pii_scan_result.get("secret_types", []),
+                        },
+                        run_id,
+                    )
 
                     if self._brain_logger and run_id:
                         self._brain_logger.fail_run(
@@ -714,12 +724,16 @@ class BaseAgent(ABC):
         task.started_at = datetime.now()
         self.active_tasks[task.task_id] = task
 
-        self._log_event("task_started", {
-            "task_id": task.task_id,
-            "task_type": task.task_type,
-            "tenant_id": tenant_id,
-            "message": f"Starting task: {task.description[:100]}..."
-        }, run_id)
+        self._log_event(
+            "task_started",
+            {
+                "task_id": task.task_id,
+                "task_type": task.task_type,
+                "tenant_id": tenant_id,
+                "message": f"Starting task: {task.description[:100]}...",
+            },
+            run_id,
+        )
 
         # Determine LLM order (primary + fallbacks)
         llm_order = self._determine_llm_order(task)
@@ -731,11 +745,15 @@ class BaseAgent(ABC):
         for llm_idx, llm_provider in enumerate(llm_order):
             if llm_idx > 0:
                 fallback_used = True
-                self._log_event("fallback_attempt", {
-                    "task_id": task.task_id,
-                    "llm_provider": llm_provider.value,
-                    "attempt": llm_idx + 1,
-                }, run_id)
+                self._log_event(
+                    "fallback_attempt",
+                    {
+                        "task_id": task.task_id,
+                        "llm_provider": llm_provider.value,
+                        "attempt": llm_idx + 1,
+                    },
+                    run_id,
+                )
 
             # Attempt with retries
             for attempt in range(self.config.max_retries):
@@ -749,14 +767,18 @@ class BaseAgent(ABC):
                         # Calculate delay with exponential backoff
                         delay = self.config.retry_delay_seconds
                         if self.config.exponential_backoff:
-                            delay *= (self.config.backoff_multiplier ** attempt)
+                            delay *= self.config.backoff_multiplier**attempt
                             delay = min(delay, self.config.max_backoff_seconds)
 
-                        self._log_event("retry_attempt", {
-                            "task_id": task.task_id,
-                            "attempt": attempt + 1,
-                            "delay_seconds": delay,
-                        }, run_id)
+                        self._log_event(
+                            "retry_attempt",
+                            {
+                                "task_id": task.task_id,
+                                "attempt": attempt + 1,
+                                "delay_seconds": delay,
+                            },
+                            run_id,
+                        )
 
                         await asyncio.sleep(delay)
 
@@ -785,13 +807,15 @@ class BaseAgent(ABC):
                             attempt_number=attempt + 1,
                         )
 
-                    execution_log.append({
-                        "llm_provider": llm_provider.value,
-                        "attempt": attempt + 1,
-                        "success": True,
-                        "latency_ms": call_latency,
-                        "timestamp": datetime.now().isoformat(),
-                    })
+                    execution_log.append(
+                        {
+                            "llm_provider": llm_provider.value,
+                            "attempt": attempt + 1,
+                            "success": True,
+                            "latency_ms": call_latency,
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
 
                     # Process response
                     processed = self._process_response(raw_response, task)
@@ -800,15 +824,21 @@ class BaseAgent(ABC):
                     confidence = self._calculate_confidence(processed, task)
 
                     # Check if confidence meets threshold
-                    if (confidence < self.config.min_confidence_score and
-                        self.config.retry_on_low_confidence and
-                        attempt < self.config.max_retries - 1):
+                    if (
+                        confidence < self.config.min_confidence_score
+                        and self.config.retry_on_low_confidence
+                        and attempt < self.config.max_retries - 1
+                    ):
 
-                        self._log_event("low_confidence_retry", {
-                            "task_id": task.task_id,
-                            "confidence": confidence,
-                            "threshold": self.config.min_confidence_score,
-                        }, run_id)
+                        self._log_event(
+                            "low_confidence_retry",
+                            {
+                                "task_id": task.task_id,
+                                "confidence": confidence,
+                                "threshold": self.config.min_confidence_score,
+                            },
+                            run_id,
+                        )
                         continue
 
                     # Success!
@@ -845,13 +875,17 @@ class BaseAgent(ABC):
                     task.status = TaskStatus.COMPLETED
                     task.completed_at = datetime.now()
 
-                    self._log_event("task_completed", {
-                        "task_id": task.task_id,
-                        "success": True,
-                        "confidence": confidence,
-                        "processing_time": processing_time,
-                        "message": "Task completed successfully",
-                    }, run_id)
+                    self._log_event(
+                        "task_completed",
+                        {
+                            "task_id": task.task_id,
+                            "success": True,
+                            "confidence": confidence,
+                            "processing_time": processing_time,
+                            "message": "Task completed successfully",
+                        },
+                        run_id,
+                    )
 
                     # Complete Brain logging
                     if self._brain_logger and run_id:
@@ -859,7 +893,11 @@ class BaseAgent(ABC):
                             run_id=run_id,
                             success=True,
                             output_data={
-                                "response_preview": response.response_text[:500] if self.config.log_responses else "[REDACTED]",
+                                "response_preview": (
+                                    response.response_text[:500]
+                                    if self.config.log_responses
+                                    else "[REDACTED]"
+                                ),
                                 "confidence_score": confidence,
                             },
                             tokens_used=response.total_tokens,
@@ -876,13 +914,15 @@ class BaseAgent(ABC):
 
                 except Exception as e:
                     last_error = str(e)
-                    execution_log.append({
-                        "llm_provider": llm_provider.value,
-                        "attempt": attempt + 1,
-                        "success": False,
-                        "error": last_error,
-                        "timestamp": datetime.now().isoformat(),
-                    })
+                    execution_log.append(
+                        {
+                            "llm_provider": llm_provider.value,
+                            "attempt": attempt + 1,
+                            "success": False,
+                            "error": last_error,
+                            "timestamp": datetime.now().isoformat(),
+                        }
+                    )
 
                     # Log failed model usage
                     if self._brain_logger and run_id:
@@ -896,18 +936,26 @@ class BaseAgent(ABC):
                             error=last_error,
                         )
 
-                    self._log_event("llm_call_failed", {
-                        "task_id": task.task_id,
-                        "llm_provider": llm_provider.value,
-                        "attempt": attempt + 1,
-                        "error": last_error,
-                    }, run_id)
+                    self._log_event(
+                        "llm_call_failed",
+                        {
+                            "task_id": task.task_id,
+                            "llm_provider": llm_provider.value,
+                            "attempt": attempt + 1,
+                            "error": last_error,
+                        },
+                        run_id,
+                    )
 
         # All attempts failed - use fallback handler
-        self._log_event("all_attempts_failed", {
-            "task_id": task.task_id,
-            "last_error": last_error,
-        }, run_id)
+        self._log_event(
+            "all_attempts_failed",
+            {
+                "task_id": task.task_id,
+                "last_error": last_error,
+            },
+            run_id,
+        )
 
         response = self._fallback_handler(task, last_error or "All LLM attempts failed")
         response.execution_log = execution_log
@@ -958,10 +1006,8 @@ class BaseAgent(ABC):
         return loop.run_until_complete(self.execute_task(task))
 
     async def _call_llm(
-        self,
-        task: AgentTask,
-        llm_provider: LLMProvider
-    ) -> tuple[str, Dict[str, int]]:
+        self, task: AgentTask, llm_provider: LLMProvider
+    ) -> tuple[str, dict[str, int]]:
         """
         Make an LLM API call.
 
@@ -973,7 +1019,9 @@ class BaseAgent(ABC):
             Tuple of (response_text, usage_dict)
         """
         if self.llm_client is None:
-            raise RuntimeError("No LLM client configured. Please provide a MultiLLMClient instance.")
+            raise RuntimeError(
+                "No LLM client configured. Please provide a MultiLLMClient instance."
+            )
 
         # Get system prompt
         system_prompt = task.system_prompt or self._get_system_prompt(task)
@@ -988,12 +1036,17 @@ class BaseAgent(ABC):
 
         # Log if enabled
         if self.config.log_prompts:
-            self._log_event("llm_request", {
-                "task_id": task.task_id,
-                "llm_provider": llm_provider.value,
-                "model": model,
-                "prompt_preview": task.prompt[:200] + "..." if len(task.prompt) > 200 else task.prompt,
-            })
+            self._log_event(
+                "llm_request",
+                {
+                    "task_id": task.task_id,
+                    "llm_provider": llm_provider.value,
+                    "model": model,
+                    "prompt_preview": (
+                        task.prompt[:200] + "..." if len(task.prompt) > 200 else task.prompt
+                    ),
+                },
+            )
 
         # Make the call through the multi-LLM client
         response = await self.llm_client.generate(
@@ -1002,20 +1055,27 @@ class BaseAgent(ABC):
             system_prompt=system_prompt,
             provider=llm_provider,
             model=model,
-            **params
+            **params,
         )
 
         # Log response if enabled
         if self.config.log_responses:
-            self._log_event("llm_response", {
-                "task_id": task.task_id,
-                "llm_provider": llm_provider.value,
-                "response_preview": response["text"][:200] + "..." if len(response["text"]) > 200 else response["text"],
-            })
+            self._log_event(
+                "llm_response",
+                {
+                    "task_id": task.task_id,
+                    "llm_provider": llm_provider.value,
+                    "response_preview": (
+                        response["text"][:200] + "..."
+                        if len(response["text"]) > 200
+                        else response["text"]
+                    ),
+                },
+            )
 
         return response["text"], response.get("usage", {})
 
-    def _determine_llm_order(self, task: AgentTask) -> List[LLMProvider]:
+    def _determine_llm_order(self, task: AgentTask) -> list[LLMProvider]:
         """
         Determine the order of LLMs to try based on task preferences and config.
 
@@ -1042,11 +1102,7 @@ class BaseAgent(ABC):
 
         return order
 
-    def _calculate_confidence(
-        self,
-        processed_response: Dict[str, Any],
-        task: AgentTask
-    ) -> float:
+    def _calculate_confidence(self, processed_response: dict[str, Any], task: AgentTask) -> float:
         """
         Calculate confidence score for a response.
 
@@ -1095,16 +1151,16 @@ class BaseAgent(ABC):
         # Update average response time
         n = self.total_requests
         self.average_response_time = (
-            (self.average_response_time * (n - 1) + response.processing_time_seconds) / n
-        )
+            self.average_response_time * (n - 1) + response.processing_time_seconds
+        ) / n
 
     def create_task(
         self,
         prompt: str,
         task_type: str = "general",
         description: str = "",
-        tenant_id: Optional[str] = None,
-        **kwargs
+        tenant_id: str | None = None,
+        **kwargs,
     ) -> AgentTask:
         """
         Create a new task for this agent.
@@ -1123,7 +1179,8 @@ class BaseAgent(ABC):
         context = kwargs.get("agent_context")
         if context is None and (tenant_id or self.default_context):
             context = AgentContext(
-                tenant_id=tenant_id or (self.default_context.tenant_id if self.default_context else None),
+                tenant_id=tenant_id
+                or (self.default_context.tenant_id if self.default_context else None),
                 user_id=self.default_context.user_id if self.default_context else None,
                 session_id=self.default_context.session_id if self.default_context else None,
             )
@@ -1143,7 +1200,7 @@ class BaseAgent(ABC):
             agent_context=context,
         )
 
-    def get_capabilities(self) -> Dict[str, Any]:
+    def get_capabilities(self) -> dict[str, Any]:
         """
         Get agent capabilities and status.
 
@@ -1168,9 +1225,7 @@ class BaseAgent(ABC):
                 "total_requests": self.total_requests,
                 "successful_requests": self.successful_requests,
                 "failed_requests": self.failed_requests,
-                "success_rate": (
-                    self.successful_requests / max(1, self.total_requests)
-                ),
+                "success_rate": (self.successful_requests / max(1, self.total_requests)),
                 "total_retries": self.total_retries,
                 "average_response_time": self.average_response_time,
                 "total_tokens_used": self.total_tokens_used,
@@ -1180,7 +1235,7 @@ class BaseAgent(ABC):
             "default_tenant_id": self.default_context.tenant_id if self.default_context else None,
         }
 
-    def get_metrics(self) -> Dict[str, Any]:
+    def get_metrics(self) -> dict[str, Any]:
         """Get current performance metrics"""
         return self.get_capabilities()["metrics"]
 
@@ -1205,11 +1260,11 @@ def create_agent(
     agent_class: type,
     agent_name: str,
     agent_type: str,
-    config: Optional[AgentConfig] = None,
+    config: AgentConfig | None = None,
     llm_client=None,
     brain_logger=None,
     security_scanner=None,
-    tenant_id: Optional[str] = None,
+    tenant_id: str | None = None,
 ) -> BaseAgent:
     """
     Factory function for creating agent instances.

@@ -6,7 +6,7 @@ Guarantees repeatable operations via input-hash based de-duplication.
 
 Usage:
     from brain.resilience import IdempotencyManager, IdempotencyConfig
-    
+
     manager = IdempotencyManager(session, tenant_id)
     with manager.operation_scope(op_type, inputs) as scope:
         if scope.was_skipped:
@@ -44,9 +44,12 @@ logger = get_logger(__name__)
 @dataclass
 class IdempotencyConfig:
     """Configuration for idempotency management."""
+
     normalize_paths: bool = True
     normalize_case: bool = False
-    exclude_fields: list[str] = field(default_factory=lambda: ['timestamp', 'correlation_id', 'request_id'])
+    exclude_fields: list[str] = field(
+        default_factory=lambda: ["timestamp", "correlation_id", "request_id"]
+    )
     skip_on_success: bool = True
     skip_on_in_progress: bool = True
     skip_on_pending: bool = False
@@ -62,6 +65,7 @@ DEFAULT_CONFIG = IdempotencyConfig()
 @dataclass
 class IdempotencyCheckResult:
     """Result of an idempotency check."""
+
     should_run: bool
     existing_operation: Operation | None = None
     cached_result: dict[str, Any] | None = None
@@ -76,6 +80,7 @@ class IdempotencyCheckResult:
 @dataclass
 class OperationResult:
     """Result of an idempotent operation execution."""
+
     success: bool
     operation_id: str
     was_cached: bool = False
@@ -93,8 +98,8 @@ def normalize_input_value(value: Any, config: IdempotencyConfig) -> Any:
     if value is None:
         return None
     if isinstance(value, str):
-        if config.normalize_paths and ('/' in value or '\\' in value):
-            return value.replace('\\', '/').rstrip('/')
+        if config.normalize_paths and ("/" in value or "\\" in value):
+            return value.replace("\\", "/").rstrip("/")
         return value.lower() if config.normalize_case else value
     if isinstance(value, (list, tuple)):
         return [normalize_input_value(v, config) for v in value]
@@ -107,28 +112,43 @@ def normalize_input_value(value: Any, config: IdempotencyConfig) -> Any:
     return value
 
 
-def compute_input_hash(op_type: str | OperationTypeEnum, inputs: dict[str, Any],
-                       config: IdempotencyConfig | None = None) -> str:
+def compute_input_hash(
+    op_type: str | OperationTypeEnum,
+    inputs: dict[str, Any],
+    config: IdempotencyConfig | None = None,
+) -> str:
     """Compute deterministic hash of operation inputs for idempotency."""
     config = config or DEFAULT_CONFIG
     op_type_str = op_type.value if isinstance(op_type, OperationTypeEnum) else op_type
     filtered = {k: v for k, v in inputs.items() if k not in config.exclude_fields}
-    normalized = json.dumps({"op_type": op_type_str, "inputs": normalize_input_value(filtered, config)}, sort_keys=True, default=str)
+    normalized = json.dumps(
+        {"op_type": op_type_str, "inputs": normalize_input_value(filtered, config)},
+        sort_keys=True,
+        default=str,
+    )
     return hashlib.sha256(normalized.encode()).hexdigest()
 
 
 class IdempotencyManager:
     """Manages idempotent operation execution."""
 
-    def __init__(self, session: Session, tenant_id: str | UUID, config: IdempotencyConfig | None = None):
+    def __init__(
+        self, session: Session, tenant_id: str | UUID, config: IdempotencyConfig | None = None
+    ):
         self.session = session
         self.tenant_id = str(tenant_id) if isinstance(tenant_id, UUID) else tenant_id
         self.config = config or DEFAULT_CONFIG
 
-    def check_operation(self, op_type: OperationTypeEnum, inputs: dict[str, Any]) -> IdempotencyCheckResult:
+    def check_operation(
+        self, op_type: OperationTypeEnum, inputs: dict[str, Any]
+    ) -> IdempotencyCheckResult:
         """Check if an operation should run or return cached result."""
         input_hash = compute_input_hash(op_type, inputs, self.config)
-        existing = self.session.query(Operation).filter(Operation.op_type == op_type, Operation.input_hash == input_hash).first()
+        existing = (
+            self.session.query(Operation)
+            .filter(Operation.op_type == op_type, Operation.input_hash == input_hash)
+            .first()
+        )
 
         if existing is None:
             return IdempotencyCheckResult(should_run=True, computed_hash=input_hash)
@@ -138,8 +158,13 @@ class IdempotencyManager:
         if status == OperationStatusEnum.SUCCESS and self.config.skip_on_success:
             if self.config.log_skips:
                 logger.info(f"Skipping {op_type.value} - already succeeded: {existing.id}")
-            return IdempotencyCheckResult(should_run=False, existing_operation=existing, cached_result=existing.outputs,
-                                         skip_reason="Already completed successfully", computed_hash=input_hash)
+            return IdempotencyCheckResult(
+                should_run=False,
+                existing_operation=existing,
+                cached_result=existing.outputs,
+                skip_reason="Already completed successfully",
+                computed_hash=input_hash,
+            )
 
         if status == OperationStatusEnum.IN_PROGRESS:
             if self._is_operation_stale(existing) and self.config.auto_retry_stale:
@@ -147,28 +172,54 @@ class IdempotencyManager:
                 existing.error_message = "Marked stale - exceeded timeout"
                 self.session.flush()
                 logger.warning(f"Marking stale operation as failed: {existing.id}")
-                return IdempotencyCheckResult(should_run=True, existing_operation=existing, computed_hash=input_hash)
+                return IdempotencyCheckResult(
+                    should_run=True, existing_operation=existing, computed_hash=input_hash
+                )
             if self.config.skip_on_in_progress:
-                return IdempotencyCheckResult(should_run=False, existing_operation=existing,
-                                             skip_reason="Already in progress", computed_hash=input_hash)
+                return IdempotencyCheckResult(
+                    should_run=False,
+                    existing_operation=existing,
+                    skip_reason="Already in progress",
+                    computed_hash=input_hash,
+                )
 
         if status == OperationStatusEnum.PENDING and self.config.skip_on_pending:
-            return IdempotencyCheckResult(should_run=False, existing_operation=existing,
-                                         skip_reason="Operation pending", computed_hash=input_hash)
+            return IdempotencyCheckResult(
+                should_run=False,
+                existing_operation=existing,
+                skip_reason="Operation pending",
+                computed_hash=input_hash,
+            )
 
-        return IdempotencyCheckResult(should_run=True, existing_operation=existing, computed_hash=input_hash)
+        return IdempotencyCheckResult(
+            should_run=True, existing_operation=existing, computed_hash=input_hash
+        )
 
-    def should_run_operation(self, op_type: OperationTypeEnum, inputs: dict[str, Any]) -> tuple[bool, Operation | None]:
+    def should_run_operation(
+        self, op_type: OperationTypeEnum, inputs: dict[str, Any]
+    ) -> tuple[bool, Operation | None]:
         """Simple check returning (should_run, existing_operation)."""
         result = self.check_operation(op_type, inputs)
         return result.should_run, result.existing_operation
 
-    def create_operation(self, op_type: OperationTypeEnum, inputs: dict[str, Any],
-                        correlation_id: str | None = None, agent_id: str | None = None, **kwargs) -> tuple[Operation, bool]:
+    def create_operation(
+        self,
+        op_type: OperationTypeEnum,
+        inputs: dict[str, Any],
+        correlation_id: str | None = None,
+        agent_id: str | None = None,
+        **kwargs,
+    ) -> tuple[Operation, bool]:
         """Create a new operation record (or get existing)."""
         operation, created = get_or_create_operation(
-            session=self.session, tenant_id=self.tenant_id, op_type=op_type, inputs=inputs,
-            correlation_id=correlation_id or get_correlation_id(), agent_id=agent_id, **kwargs)
+            session=self.session,
+            tenant_id=self.tenant_id,
+            op_type=op_type,
+            inputs=inputs,
+            correlation_id=correlation_id or get_correlation_id(),
+            agent_id=agent_id,
+            **kwargs,
+        )
         if created:
             logger.info(f"Created operation: {op_type.value} ({operation.id})")
         return operation, created
@@ -176,35 +227,59 @@ class IdempotencyManager:
     def start_operation(self, operation_id: str | UUID) -> None:
         mark_operation_started(self.session, str(operation_id))
 
-    def complete_operation(self, operation_id: str | UUID, outputs: dict[str, Any] | None = None,
-                          success: bool = True, error_message: str | None = None) -> None:
+    def complete_operation(
+        self,
+        operation_id: str | UUID,
+        outputs: dict[str, Any] | None = None,
+        success: bool = True,
+        error_message: str | None = None,
+    ) -> None:
         if success:
             mark_operation_success(self.session, str(operation_id), outputs)
         else:
             mark_operation_failed(self.session, str(operation_id), error_message or "Unknown error")
 
-    def operation_scope(self, op_type: OperationTypeEnum, inputs: dict[str, Any],
-                       correlation_id: str | None = None, agent_id: str | None = None) -> "IdempotentOperationScope":
+    def operation_scope(
+        self,
+        op_type: OperationTypeEnum,
+        inputs: dict[str, Any],
+        correlation_id: str | None = None,
+        agent_id: str | None = None,
+    ) -> "IdempotentOperationScope":
         """Create a context manager for idempotent operation execution."""
         return IdempotentOperationScope(self, op_type, inputs, correlation_id, agent_id)
 
     def _is_operation_stale(self, operation: Operation) -> bool:
         if operation.started_at is None:
             return True
-        return (datetime.utcnow() - operation.started_at).total_seconds() > (self.config.stale_in_progress_minutes * 60)
+        return (datetime.utcnow() - operation.started_at).total_seconds() > (
+            self.config.stale_in_progress_minutes * 60
+        )
 
-    def get_cached_result(self, op_type: OperationTypeEnum, inputs: dict[str, Any]) -> dict[str, Any] | None:
+    def get_cached_result(
+        self, op_type: OperationTypeEnum, inputs: dict[str, Any]
+    ) -> dict[str, Any] | None:
         """Get cached result for an operation if it exists and succeeded."""
         input_hash = compute_input_hash(op_type, inputs, self.config)
-        op = self.session.query(Operation).filter(Operation.op_type == op_type, Operation.input_hash == input_hash,
-                                                   Operation.status == OperationStatusEnum.SUCCESS).first()
+        op = (
+            self.session.query(Operation)
+            .filter(
+                Operation.op_type == op_type,
+                Operation.input_hash == input_hash,
+                Operation.status == OperationStatusEnum.SUCCESS,
+            )
+            .first()
+        )
         return op.outputs if op else None
 
     def invalidate_operation(self, op_type: OperationTypeEnum, inputs: dict[str, Any]) -> bool:
         """Invalidate a cached operation to force re-execution."""
         input_hash = compute_input_hash(op_type, inputs, self.config)
-        result = self.session.query(Operation).filter(Operation.op_type == op_type, Operation.input_hash == input_hash).update(
-            {"status": OperationStatusEnum.FAILED, "error_message": "Manually invalidated"})
+        result = (
+            self.session.query(Operation)
+            .filter(Operation.op_type == op_type, Operation.input_hash == input_hash)
+            .update({"status": OperationStatusEnum.FAILED, "error_message": "Manually invalidated"})
+        )
         if result > 0:
             logger.info(f"Invalidated operation: {op_type.value}")
         return result > 0
@@ -213,8 +288,14 @@ class IdempotencyManager:
 class IdempotentOperationScope:
     """Context manager for idempotent operation execution."""
 
-    def __init__(self, manager: IdempotencyManager, op_type: OperationTypeEnum, inputs: dict[str, Any],
-                 correlation_id: str | None = None, agent_id: str | None = None):
+    def __init__(
+        self,
+        manager: IdempotencyManager,
+        op_type: OperationTypeEnum,
+        inputs: dict[str, Any],
+        correlation_id: str | None = None,
+        agent_id: str | None = None,
+    ):
         self.manager = manager
         self.op_type = op_type
         self.inputs = inputs
@@ -242,9 +323,15 @@ class IdempotentOperationScope:
             self.operation = check.existing_operation
             return self
 
-        self.operation, _ = self.manager.create_operation(self.op_type, self.inputs, self.correlation_id, self.agent_id)
+        self.operation, _ = self.manager.create_operation(
+            self.op_type, self.inputs, self.correlation_id, self.agent_id
+        )
         self.manager.start_operation(self.operation.id)
-        self._operation_context = OperationContext(correlation_id=self.correlation_id, operation_id=str(self.operation.id), agent_id=self.agent_id)
+        self._operation_context = OperationContext(
+            correlation_id=self.correlation_id,
+            operation_id=str(self.operation.id),
+            agent_id=self.agent_id,
+        )
         self._operation_context.__enter__()
         return self
 
@@ -255,9 +342,13 @@ class IdempotentOperationScope:
             return False
 
         if exc_type is not None:
-            self.manager.complete_operation(self.operation.id, success=False, error_message=str(exc_val))
+            self.manager.complete_operation(
+                self.operation.id, success=False, error_message=str(exc_val)
+            )
         elif not self._success:
-            self.manager.complete_operation(self.operation.id, success=False, error_message=self._error_message)
+            self.manager.complete_operation(
+                self.operation.id, success=False, error_message=self._error_message
+            )
         else:
             self.manager.complete_operation(self.operation.id, outputs=self._result, success=True)
         return False
@@ -272,14 +363,17 @@ class IdempotentOperationScope:
 
 
 # Convenience functions for backward compatibility
-def check_idempotency(session: Session, tenant_id: str | UUID, op_type: OperationTypeEnum,
-                      inputs: dict[str, Any]) -> tuple[Operation | None, bool]:
+def check_idempotency(
+    session: Session, tenant_id: str | UUID, op_type: OperationTypeEnum, inputs: dict[str, Any]
+) -> tuple[Operation | None, bool]:
     """Check idempotency and return (existing_operation, should_run)."""
     manager = IdempotencyManager(session, tenant_id)
     result = manager.check_operation(op_type, inputs)
     return result.existing_operation, result.should_run
 
 
-def mark_complete(session: Session, operation_id: str | UUID, outputs: dict[str, Any] | None = None) -> None:
+def mark_complete(
+    session: Session, operation_id: str | UUID, outputs: dict[str, Any] | None = None
+) -> None:
     """Mark an operation as complete."""
     mark_operation_success(session, str(operation_id), outputs)
