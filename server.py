@@ -264,12 +264,8 @@ class AgentManager:
             SummarizationAgent(
                 agent_name="Scribe", agent_type="summarization", llm_client=self.llm_client
             ),
-            PlannerAgent(
-                agent_name="Strategist", agent_type="planner", llm_client=self.llm_client
-            ),
-            ExecutorAgent(
-                agent_name="Operator", agent_type="executor", llm_client=self.llm_client
-            ),
+            PlannerAgent(agent_name="Strategist", agent_type="planner", llm_client=self.llm_client),
+            ExecutorAgent(agent_name="Operator", agent_type="executor", llm_client=self.llm_client),
             RetrieverAgent(
                 agent_name="Archivist", agent_type="retriever", llm_client=self.llm_client
             ),
@@ -277,9 +273,7 @@ class AgentManager:
                 agent_name="Profiler", agent_type="entity_extraction", llm_client=self.llm_client
             ),
             TopicAgent(agent_name="Analyst", agent_type="topic", llm_client=self.llm_client),
-            ConceptAgent(
-                agent_name="Architect", agent_type="concept", llm_client=self.llm_client
-            ),
+            ConceptAgent(agent_name="Architect", agent_type="concept", llm_client=self.llm_client),
         ]
 
     def get_agents(self) -> list[AgentDTO]:
