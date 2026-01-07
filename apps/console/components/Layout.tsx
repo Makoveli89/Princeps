@@ -4,6 +4,7 @@ import { PrincepsLogo } from './PrincepsLogo';
 import { LayoutDashboard, Play, Database, FileText, Search, Activity, Settings, HardDrive, MessageSquare } from 'lucide-react';
 import { Workspace } from '../types';
 import { COLORS } from '../constants';
+import { Toaster } from './ui/toaster';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -128,6 +129,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, workspaces, activeWork
         <div className="flex-1 overflow-auto p-8 relative z-10 scroll-smooth">
             {children}
         </div>
+        <Toaster />
       </main>
     </div>
   );

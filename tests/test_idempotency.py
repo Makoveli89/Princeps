@@ -1,15 +1,21 @@
 """Tests for idempotency logic and Operation.input_hash."""
-import pytest
-from uuid import uuid4
-from datetime import datetime, timedelta
 
-from brain.core.models import Operation, OperationTypeEnum, OperationStatusEnum, compute_input_hash
-from brain.core.db import get_or_create_operation, mark_operation_started, mark_operation_success, mark_operation_failed
+from datetime import datetime, timedelta
+from uuid import uuid4
+
+from brain.core.db import (
+    get_or_create_operation,
+    mark_operation_failed,
+    mark_operation_started,
+    mark_operation_success,
+)
+from brain.core.models import OperationStatusEnum, OperationTypeEnum, compute_input_hash
 from brain.resilience.idempotency_service import (
-    IdempotencyManager,
     IdempotencyConfig,
+    IdempotencyManager,
+)
+from brain.resilience.idempotency_service import (
     compute_input_hash as idem_compute_hash,
-    IdempotentOperationScope,
 )
 
 
@@ -263,9 +269,7 @@ class TestAllOperationTypesGenerateHashes:
     def test_analysis_hash(self, session, tenant):
         """ANALYSIS should generate consistent hash."""
         inputs = {"document_id": str(uuid4()), "summary": True, "entities": True}
-        op, _ = get_or_create_operation(
-            session, str(tenant.id), OperationTypeEnum.ANALYSIS, inputs
-        )
+        op, _ = get_or_create_operation(session, str(tenant.id), OperationTypeEnum.ANALYSIS, inputs)
         assert op.input_hash is not None
 
     def test_retrieval_hash(self, session, tenant):

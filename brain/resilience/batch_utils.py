@@ -1,4 +1,5 @@
 """Batch Processing Utilities."""
+
 from collections.abc import Callable, Generator, Iterable
 from dataclasses import dataclass, field
 from typing import Any
@@ -10,12 +11,14 @@ class BatchConfig:
     max_errors: int = 10
     continue_on_error: bool = True
 
+
 @dataclass
 class BatchResult:
     success: bool = True
     processed: int = 0
     failed: int = 0
     errors: list[str] = field(default_factory=list)
+
 
 class BatchProcessor:
     def __init__(self, config: BatchConfig | None = None):
@@ -55,6 +58,7 @@ class BatchProcessor:
                 batch = []
         if batch:
             yield batch
+
 
 def process_in_batches(items: Iterable, processor: Callable, batch_size: int = 100) -> BatchResult:
     """Convenience function for batch processing."""

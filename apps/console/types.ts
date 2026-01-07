@@ -72,11 +72,3 @@ export interface SystemHealth {
     GEMINI_API_KEY: boolean;
   };
 }
-
-export interface Message {
-    id: string;
-    role: 'user' | 'model';
-    text: string;
-    groundingMetadata?: any;
-    timestamp: Date;
-}

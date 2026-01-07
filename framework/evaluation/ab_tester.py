@@ -27,14 +27,11 @@ import hashlib
 import json
 import logging
 import math
-import random
-import time
-import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from pathlib import Path
-from typing import Any, Callable, Dict, List, Optional, Tuple
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
@@ -43,8 +40,10 @@ logger = logging.getLogger(__name__)
 # Enums and Configuration
 # =============================================================================
 
+
 class ExperimentStatus(Enum):
     """Status of an experiment."""
+
     DRAFT = "draft"
     RUNNING = "running"
     PAUSED = "paused"
@@ -55,12 +54,14 @@ class ExperimentStatus(Enum):
 
 class VariantType(Enum):
     """Type of experiment variant."""
-    CONTROL = "control"      # Baseline version
+
+    CONTROL = "control"  # Baseline version
     TREATMENT = "treatment"  # New version being tested
 
 
 class MetricGoal(Enum):
     """Goal direction for metrics."""
+
     MAXIMIZE = "maximize"  # Higher is better (accuracy, success rate)
     MINIMIZE = "minimize"  # Lower is better (latency, error rate)
 
@@ -91,6 +92,7 @@ class ExperimentConfig:
 # Variant Definition
 # =============================================================================
 
+
 @dataclass
 class Variant:
     """A variant in an A/B experiment."""
@@ -99,7 +101,7 @@ class Variant:
     name: str
     variant_type: VariantType
     traffic_percentage: float  # 0.0 to 1.0
-    config: Dict[str, Any] = field(default_factory=dict)
+    config: dict[str, Any] = field(default_factory=dict)
     description: str = ""
 
     # Metrics (updated during experiment)
@@ -110,8 +112,8 @@ class Variant:
     error_count: int = 0
 
     # Additional metric accumulators
-    metric_sums: Dict[str, float] = field(default_factory=dict)
-    metric_counts: Dict[str, int] = field(default_factory=dict)
+    metric_sums: dict[str, float] = field(default_factory=dict)
+    metric_counts: dict[str, int] = field(default_factory=dict)
 
     def success_rate(self) -> float:
         """Calculate success/conversion rate."""
@@ -136,7 +138,7 @@ class Variant:
             return 0.0
         return self.metric_sums.get(metric_name, 0.0) / count
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "id": self.id,
@@ -157,6 +159,7 @@ class Variant:
 # Experiment Definition
 # =============================================================================
 
+
 @dataclass
 class Experiment:
     """An A/B test experiment."""
@@ -168,35 +171,35 @@ class Experiment:
     primary_metric: str  # Main metric to optimize
     metric_goal: MetricGoal = MetricGoal.MAXIMIZE
 
-    variants: List[Variant] = field(default_factory=list)
+    variants: list[Variant] = field(default_factory=list)
     status: ExperimentStatus = ExperimentStatus.DRAFT
 
     # Timing
     created_at: datetime = field(default_factory=datetime.utcnow)
-    started_at: Optional[datetime] = None
-    ended_at: Optional[datetime] = None
+    started_at: datetime | None = None
+    ended_at: datetime | None = None
 
     # Targets
     target_sample_size: int = 1000
-    max_duration_hours: Optional[float] = None
+    max_duration_hours: float | None = None
 
     # Results
-    winner_variant_id: Optional[str] = None
+    winner_variant_id: str | None = None
     is_significant: bool = False
     p_value: float = 1.0
     improvement_percentage: float = 0.0
 
     # Metadata
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def get_control(self) -> Optional[Variant]:
+    def get_control(self) -> Variant | None:
         """Get the control variant."""
         for v in self.variants:
             if v.variant_type == VariantType.CONTROL:
                 return v
         return self.variants[0] if self.variants else None
 
-    def get_treatment(self) -> Optional[Variant]:
+    def get_treatment(self) -> Variant | None:
         """Get the treatment variant."""
         for v in self.variants:
             if v.variant_type == VariantType.TREATMENT:
@@ -211,7 +214,7 @@ class Experiment:
         """Get progress towards target sample size."""
         return min(1.0, self.total_impressions() / self.target_sample_size)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "id": self.id,
@@ -238,6 +241,7 @@ class Experiment:
 # Experiment Results
 # =============================================================================
 
+
 @dataclass
 class ExperimentResults:
     """Results from an A/B experiment."""
@@ -258,16 +262,16 @@ class ExperimentResults:
 
     # Statistical analysis
     p_value: float = 1.0
-    confidence_interval: Tuple[float, float] = (0.0, 0.0)
+    confidence_interval: tuple[float, float] = (0.0, 0.0)
     is_significant: bool = False
     confidence_level: float = 0.95
 
     # Winner
-    winner_variant_id: Optional[str] = None
+    winner_variant_id: str | None = None
     improvement_percentage: float = 0.0
     recommendation: str = ""
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "experiment_id": self.experiment_id,
@@ -292,6 +296,7 @@ class ExperimentResults:
 # Statistical Functions
 # =============================================================================
 
+
 def calculate_z_score(p1: float, p2: float, n1: int, n2: int) -> float:
     """Calculate z-score for two proportions."""
     if n1 == 0 or n2 == 0:
@@ -304,7 +309,7 @@ def calculate_z_score(p1: float, p2: float, n1: int, n2: int) -> float:
         return 0.0
 
     # Standard error
-    se = math.sqrt(p_pool * (1 - p_pool) * (1/n1 + 1/n2))
+    se = math.sqrt(p_pool * (1 - p_pool) * (1 / n1 + 1 / n2))
 
     if se == 0:
         return 0.0
@@ -327,7 +332,7 @@ def calculate_confidence_interval(
     p: float,
     n: int,
     confidence: float = 0.95,
-) -> Tuple[float, float]:
+) -> tuple[float, float]:
     """Calculate confidence interval for a proportion."""
     if n == 0:
         return (0.0, 0.0)
@@ -357,7 +362,7 @@ def calculate_sample_size(
 
     # Z-values
     z_alpha = 1.96  # Two-tailed 0.05
-    z_beta = 0.84   # Power 0.8
+    z_beta = 0.84  # Power 0.8
 
     p_avg = (p1 + p2) / 2
     n = (2 * p_avg * (1 - p_avg) * (z_alpha + z_beta) ** 2) / ((p2 - p1) ** 2)
@@ -368,6 +373,7 @@ def calculate_sample_size(
 # =============================================================================
 # A/B Tester Implementation
 # =============================================================================
+
 
 class ABTester:
     """
@@ -402,15 +408,15 @@ class ABTester:
 
     def __init__(
         self,
-        config: Optional[ExperimentConfig] = None,
+        config: ExperimentConfig | None = None,
     ):
         self.config = config or ExperimentConfig()
 
         # Experiments registry
-        self._experiments: Dict[str, Experiment] = {}
+        self._experiments: dict[str, Experiment] = {}
 
         # Variant assignments (consistent hashing)
-        self._assignments: Dict[str, Dict[str, str]] = {}  # {exp_id: {user_id: variant_id}}
+        self._assignments: dict[str, dict[str, str]] = {}  # {exp_id: {user_id: variant_id}}
 
         # Results directory
         self._results_dir = Path(self.config.results_dir)
@@ -438,8 +444,8 @@ class ABTester:
         name: str,
         agent_id: str,
         primary_metric: str,
-        control_config: Dict[str, Any],
-        treatment_config: Dict[str, Any],
+        control_config: dict[str, Any],
+        treatment_config: dict[str, Any],
         traffic_split: float = 0.5,
         description: str = "",
         target_sample_size: int = 1000,
@@ -503,7 +509,9 @@ class ABTester:
 
         logger.info(f"Created experiment {exp_id}: {name}")
         logger.info(f"  Agent: {agent_id}, Metric: {primary_metric}")
-        logger.info(f"  Traffic split: {(1-traffic_split)*100:.0f}% control, {traffic_split*100:.0f}% treatment")
+        logger.info(
+            f"  Traffic split: {(1-traffic_split)*100:.0f}% control, {traffic_split*100:.0f}% treatment"
+        )
 
         return exp_id
 
@@ -632,7 +640,7 @@ class ABTester:
         self,
         experiment_id: str,
         user_id: str,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Get the configuration for a user's assigned variant."""
         variant = self.assign_variant(experiment_id, user_id)
         return variant.config
@@ -673,7 +681,7 @@ class ABTester:
         score: float = 0.0,
         latency_ms: float = 0.0,
         error: bool = False,
-        metrics: Optional[Dict[str, float]] = None,
+        metrics: dict[str, float] | None = None,
     ) -> None:
         """
         Record the result of an interaction.
@@ -810,18 +818,30 @@ class ABTester:
         # Determine winner
         if exp.metric_goal == MetricGoal.MAXIMIZE:
             winner_id = treatment.id if treatment_value > control_value else control.id
-            improvement = ((treatment_value - control_value) / control_value * 100) if control_value > 0 else 0
+            improvement = (
+                ((treatment_value - control_value) / control_value * 100)
+                if control_value > 0
+                else 0
+            )
         else:
             winner_id = treatment.id if treatment_value < control_value else control.id
-            improvement = ((control_value - treatment_value) / control_value * 100) if control_value > 0 else 0
+            improvement = (
+                ((control_value - treatment_value) / control_value * 100)
+                if control_value > 0
+                else 0
+            )
 
         # Generate recommendation
         if not is_significant:
             recommendation = "Not enough evidence to determine a winner. Continue the experiment."
         elif winner_id == treatment.id:
-            recommendation = f"Treatment is the winner with {improvement:+.1f}% improvement. Consider deploying."
+            recommendation = (
+                f"Treatment is the winner with {improvement:+.1f}% improvement. Consider deploying."
+            )
         else:
-            recommendation = f"Control performs better. Treatment shows {improvement:+.1f}% degradation."
+            recommendation = (
+                f"Control performs better. Treatment shows {improvement:+.1f}% degradation."
+            )
 
         return ExperimentResults(
             experiment_id=exp.id,
@@ -842,7 +862,7 @@ class ABTester:
             recommendation=recommendation,
         )
 
-    def get_experiment_status(self, experiment_id: str) -> Dict[str, Any]:
+    def get_experiment_status(self, experiment_id: str) -> dict[str, Any]:
         """Get current status of an experiment."""
         exp = self._experiments.get(experiment_id)
         if not exp:
@@ -852,9 +872,9 @@ class ABTester:
 
     def list_experiments(
         self,
-        status: Optional[ExperimentStatus] = None,
-        agent_id: Optional[str] = None,
-    ) -> List[Dict[str, Any]]:
+        status: ExperimentStatus | None = None,
+        agent_id: str | None = None,
+    ) -> list[dict[str, Any]]:
         """List experiments with optional filtering."""
         results = []
 
@@ -880,7 +900,7 @@ class ABTester:
 
         logger.info(f"Saved results to {results_file}")
 
-    def load_experiment(self, experiment_id: str) -> Optional[ExperimentResults]:
+    def load_experiment(self, experiment_id: str) -> ExperimentResults | None:
         """Load saved experiment results."""
         results_file = self._results_dir / f"{experiment_id}_results.json"
 
@@ -897,7 +917,7 @@ class ABTester:
     # Statistics
     # =========================================================================
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get A/B tester statistics."""
         running = sum(1 for e in self._experiments.values() if e.status == ExperimentStatus.RUNNING)
 
@@ -905,8 +925,7 @@ class ABTester:
             **self._stats,
             "running_experiments": running,
             "active_experiments": list(
-                e.id for e in self._experiments.values()
-                if e.status == ExperimentStatus.RUNNING
+                e.id for e in self._experiments.values() if e.status == ExperimentStatus.RUNNING
             ),
         }
 
@@ -916,10 +935,10 @@ class ABTester:
 # =============================================================================
 
 # Global A/B tester instance
-_ab_tester: Optional[ABTester] = None
+_ab_tester: ABTester | None = None
 
 
-def get_ab_tester(config: Optional[ExperimentConfig] = None) -> ABTester:
+def get_ab_tester(config: ExperimentConfig | None = None) -> ABTester:
     """Get or create the global A/B tester."""
     global _ab_tester
 
@@ -933,8 +952,8 @@ def create_experiment(
     name: str,
     agent_id: str,
     primary_metric: str,
-    control_config: Dict[str, Any],
-    treatment_config: Dict[str, Any],
+    control_config: dict[str, Any],
+    treatment_config: dict[str, Any],
     **kwargs,
 ) -> str:
     """Convenience function to create an experiment."""

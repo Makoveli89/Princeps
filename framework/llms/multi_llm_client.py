@@ -25,31 +25,29 @@ Adapted from patterns in:
 - embedding_prototype.py: Cascade/fallback retrieval patterns
 """
 
-import os
-import json
-import logging
 import asyncio
-import time
+import logging
+import os
 import re
-from abc import ABC, abstractmethod
-from dataclasses import dataclass, field
-from datetime import datetime, timedelta
-from enum import Enum
-from typing import Any, Dict, List, Optional, Union, Callable, Tuple
 import threading
+import time
+from abc import ABC, abstractmethod
 from collections import deque
-import hashlib
+from dataclasses import dataclass, field
+from datetime import datetime
+from enum import Enum
+from typing import Any
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO,
-    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
+    level=logging.INFO, format="%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
 
 class LLMProvider(Enum):
     """Supported LLM providers"""
+
     ANTHROPIC = "anthropic"
     OPENAI = "openai"
     GOOGLE = "google"
@@ -60,6 +58,7 @@ class LLMProvider(Enum):
 
 class ProviderStatus(Enum):
     """Status of an LLM provider"""
+
     AVAILABLE = "available"
     RATE_LIMITED = "rate_limited"
     ERROR = "error"
@@ -69,6 +68,7 @@ class ProviderStatus(Enum):
 
 class ContentType(Enum):
     """Content type for routing decisions"""
+
     CODE = "code"
     GENERAL = "general"
     CREATIVE = "creative"
@@ -82,48 +82,54 @@ class LLMConfig:
     """Configuration for LLM client"""
 
     # Provider-specific API keys (can also use environment variables)
-    anthropic_api_key: Optional[str] = None
-    openai_api_key: Optional[str] = None
-    google_api_key: Optional[str] = None
+    anthropic_api_key: str | None = None
+    openai_api_key: str | None = None
+    google_api_key: str | None = None
 
     # Default models per provider
-    default_models: Dict[str, str] = field(default_factory=lambda: {
-        "anthropic": "claude-3-5-sonnet-20241022",
-        "openai": "gpt-4-turbo-preview",
-        "google": "gemini-pro",
-        "meta": "codellama/CodeLlama-7b-Python-hf",
-        "local": "default",
-    })
+    default_models: dict[str, str] = field(
+        default_factory=lambda: {
+            "anthropic": "claude-3-5-sonnet-20241022",
+            "openai": "gpt-4-turbo-preview",
+            "google": "gemini-pro",
+            "meta": "codellama/CodeLlama-7b-Python-hf",
+            "local": "default",
+        }
+    )
 
     # Content-based model preferences (route specific content types to specialized models)
-    content_routing: Dict[str, Dict[str, str]] = field(default_factory=lambda: {
-        "code": {
-            "anthropic": "claude-3-5-sonnet-20241022",
-            "openai": "gpt-4-turbo-preview",
-            "meta": "codellama/CodeLlama-34b-Python-hf",
-        },
-        "creative": {
-            "anthropic": "claude-3-5-sonnet-20241022",
-            "openai": "gpt-4-turbo-preview",
-        },
-        "analysis": {
-            "anthropic": "claude-3-5-sonnet-20241022",
-            "openai": "gpt-4-turbo-preview",
-        },
-        "math": {
-            "openai": "gpt-4-turbo-preview",
-            "anthropic": "claude-3-5-sonnet-20241022",
-        },
-    })
+    content_routing: dict[str, dict[str, str]] = field(
+        default_factory=lambda: {
+            "code": {
+                "anthropic": "claude-3-5-sonnet-20241022",
+                "openai": "gpt-4-turbo-preview",
+                "meta": "codellama/CodeLlama-34b-Python-hf",
+            },
+            "creative": {
+                "anthropic": "claude-3-5-sonnet-20241022",
+                "openai": "gpt-4-turbo-preview",
+            },
+            "analysis": {
+                "anthropic": "claude-3-5-sonnet-20241022",
+                "openai": "gpt-4-turbo-preview",
+            },
+            "math": {
+                "openai": "gpt-4-turbo-preview",
+                "anthropic": "claude-3-5-sonnet-20241022",
+            },
+        }
+    )
 
     # Rate limiting
-    requests_per_minute: Dict[str, int] = field(default_factory=lambda: {
-        "anthropic": 50,
-        "openai": 60,
-        "google": 60,
-        "meta": 1000,  # Local model, no API limit
-        "local": 1000,
-    })
+    requests_per_minute: dict[str, int] = field(
+        default_factory=lambda: {
+            "anthropic": 50,
+            "openai": 60,
+            "google": 60,
+            "meta": 1000,  # Local model, no API limit
+            "local": 1000,
+        }
+    )
 
     # Timeout settings
     request_timeout: float = 60.0
@@ -134,17 +140,19 @@ class LLMConfig:
     retry_delay: float = 1.0
 
     # Fallback order (default, can be overridden per content type)
-    fallback_order: List[str] = field(default_factory=lambda: [
-        "anthropic", "openai", "google", "local"
-    ])
+    fallback_order: list[str] = field(
+        default_factory=lambda: ["anthropic", "openai", "google", "local"]
+    )
 
     # Content-specific fallback orders
-    content_fallback_order: Dict[str, List[str]] = field(default_factory=lambda: {
-        "code": ["anthropic", "openai", "meta", "google"],
-        "creative": ["anthropic", "openai", "google"],
-        "analysis": ["anthropic", "openai", "google"],
-        "math": ["openai", "anthropic", "google"],
-    })
+    content_fallback_order: dict[str, list[str]] = field(
+        default_factory=lambda: {
+            "code": ["anthropic", "openai", "meta", "google"],
+            "creative": ["anthropic", "openai", "google"],
+            "analysis": ["anthropic", "openai", "google"],
+            "math": ["openai", "anthropic", "google"],
+        }
+    )
 
     # Batching
     enable_batching: bool = True
@@ -174,26 +182,26 @@ class LLMResponse:
     model: str
 
     # Usage statistics
-    usage: Dict[str, int] = field(default_factory=dict)
+    usage: dict[str, int] = field(default_factory=dict)
 
     # Metadata
-    finish_reason: Optional[str] = None
+    finish_reason: str | None = None
     latency_ms: float = 0.0
     timestamp: datetime = field(default_factory=datetime.now)
 
     # Error info
-    error: Optional[str] = None
-    error_type: Optional[str] = None
+    error: str | None = None
+    error_type: str | None = None
 
     # Raw response for debugging
-    raw_response: Optional[Dict[str, Any]] = None
+    raw_response: dict[str, Any] | None = None
 
     # Council metadata (if used)
     is_council_response: bool = False
-    council_votes: Optional[Dict[str, str]] = None
-    council_agreement: Optional[float] = None
+    council_votes: dict[str, str] | None = None
+    council_agreement: float | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary"""
         return {
             "success": self.success,
@@ -215,7 +223,8 @@ class LLMResponse:
 @dataclass
 class CouncilResult:
     """Result from council of experts query"""
-    responses: Dict[str, LLMResponse]
+
+    responses: dict[str, LLMResponse]
     consensus_text: str
     agreement_score: float
     majority_provider: str
@@ -267,15 +276,15 @@ class RateLimiter:
 class LoadBalancer:
     """Load balancer for distributing requests across providers"""
 
-    def __init__(self, providers: List[str], strategy: str = "round_robin"):
+    def __init__(self, providers: list[str], strategy: str = "round_robin"):
         self.providers = providers
         self.strategy = strategy
         self._current_index = 0
         self._lock = threading.Lock()
-        self._request_counts: Dict[str, int] = {p: 0 for p in providers}
-        self._weights: Dict[str, float] = {p: 1.0 for p in providers}
+        self._request_counts: dict[str, int] = {p: 0 for p in providers}
+        self._weights: dict[str, float] = {p: 1.0 for p in providers}
 
-    def get_next_provider(self, available_providers: List[str]) -> Optional[str]:
+    def get_next_provider(self, available_providers: list[str]) -> str | None:
         """Get next provider based on load balancing strategy"""
         if not available_providers:
             return None
@@ -300,6 +309,7 @@ class LoadBalancer:
             elif self.strategy == "weighted":
                 # Weighted selection based on configured weights
                 import random
+
                 weights = [self._weights.get(p, 1.0) for p in valid]
                 total = sum(weights)
                 if total == 0:
@@ -331,40 +341,40 @@ class ContentClassifier:
 
     # Patterns for detecting content types
     CODE_PATTERNS = [
-        r'\bdef\s+\w+\s*\(',  # Python function
-        r'\bfunction\s+\w+\s*\(',  # JavaScript function
-        r'\bclass\s+\w+',  # Class definition
-        r'```\w*\n',  # Code blocks
-        r'\bimport\s+\w+',  # Import statements
-        r'\bfrom\s+\w+\s+import',  # Python imports
-        r'[{}\[\]];',  # Code syntax
-        r'#include\s*<',  # C/C++ includes
-        r'public\s+class',  # Java class
+        r"\bdef\s+\w+\s*\(",  # Python function
+        r"\bfunction\s+\w+\s*\(",  # JavaScript function
+        r"\bclass\s+\w+",  # Class definition
+        r"```\w*\n",  # Code blocks
+        r"\bimport\s+\w+",  # Import statements
+        r"\bfrom\s+\w+\s+import",  # Python imports
+        r"[{}\[\]];",  # Code syntax
+        r"#include\s*<",  # C/C++ includes
+        r"public\s+class",  # Java class
     ]
 
     MATH_PATTERNS = [
-        r'\d+\s*[\+\-\*\/\^]\s*\d+',  # Math operations
-        r'\bsolve\b.*equation',
-        r'\bcalculate\b',
-        r'\bderivative\b',
-        r'\bintegral\b',
-        r'\bprobability\b',
-        r'\bstatistics\b',
+        r"\d+\s*[\+\-\*\/\^]\s*\d+",  # Math operations
+        r"\bsolve\b.*equation",
+        r"\bcalculate\b",
+        r"\bderivative\b",
+        r"\bintegral\b",
+        r"\bprobability\b",
+        r"\bstatistics\b",
     ]
 
     CREATIVE_PATTERNS = [
-        r'\bwrite\s+(a\s+)?(story|poem|song|essay)',
-        r'\bcreative\b',
-        r'\bimagine\b',
-        r'\bfiction\b',
+        r"\bwrite\s+(a\s+)?(story|poem|song|essay)",
+        r"\bcreative\b",
+        r"\bimagine\b",
+        r"\bfiction\b",
     ]
 
     ANALYSIS_PATTERNS = [
-        r'\banalyze\b',
-        r'\bcompare\b.*\band\b',
-        r'\bevaluate\b',
-        r'\bexplain\b.*\bdifference',
-        r'\bsummarize\b',
+        r"\banalyze\b",
+        r"\bcompare\b.*\band\b",
+        r"\bevaluate\b",
+        r"\bexplain\b.*\bdifference",
+        r"\bsummarize\b",
     ]
 
     @classmethod
@@ -402,11 +412,9 @@ class BaseLLMAdapter(ABC):
         self.config = config
         self.provider = provider
         self.status = ProviderStatus.INITIALIZING
-        self.last_error: Optional[str] = None
-        self.last_error_time: Optional[datetime] = None
-        self.rate_limiter = RateLimiter(
-            config.requests_per_minute.get(provider.value, 60)
-        )
+        self.last_error: str | None = None
+        self.last_error_time: datetime | None = None
+        self.rate_limiter = RateLimiter(config.requests_per_minute.get(provider.value, 60))
         self.total_requests = 0
         self.successful_requests = 0
         self.failed_requests = 0
@@ -416,10 +424,10 @@ class BaseLLMAdapter(ABC):
     async def generate(
         self,
         prompt: str,
-        messages: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-        **kwargs
+        messages: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
+        model: str | None = None,
+        **kwargs,
     ) -> LLMResponse:
         """Generate a response from this LLM provider"""
         pass
@@ -452,6 +460,7 @@ class AnthropicAdapter(BaseLLMAdapter):
         if self.api_key:
             try:
                 import anthropic
+
                 self.client = anthropic.Anthropic(api_key=self.api_key)
                 self.status = ProviderStatus.AVAILABLE
                 logger.info("Anthropic adapter initialized successfully")
@@ -472,10 +481,10 @@ class AnthropicAdapter(BaseLLMAdapter):
     async def generate(
         self,
         prompt: str,
-        messages: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-        **kwargs
+        messages: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
+        model: str | None = None,
+        **kwargs,
     ) -> LLMResponse:
         start_time = time.time()
         self.total_requests += 1
@@ -590,6 +599,7 @@ class OpenAIAdapter(BaseLLMAdapter):
         if self.api_key:
             try:
                 import openai
+
                 self.client = openai.OpenAI(api_key=self.api_key)
                 self.status = ProviderStatus.AVAILABLE
                 logger.info("OpenAI adapter initialized successfully")
@@ -610,10 +620,10 @@ class OpenAIAdapter(BaseLLMAdapter):
     async def generate(
         self,
         prompt: str,
-        messages: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-        **kwargs
+        messages: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
+        model: str | None = None,
+        **kwargs,
     ) -> LLMResponse:
         start_time = time.time()
         self.total_requests += 1
@@ -722,12 +732,15 @@ class GoogleAdapter(BaseLLMAdapter):
 
     def __init__(self, config: LLMConfig):
         super().__init__(config, LLMProvider.GOOGLE)
-        self.api_key = config.google_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        self.api_key = (
+            config.google_api_key or os.getenv("GEMINI_API_KEY") or os.getenv("GOOGLE_API_KEY")
+        )
         self.initialized = False
 
         if self.api_key:
             try:
                 import google.generativeai as genai
+
                 genai.configure(api_key=self.api_key)
                 self.genai = genai
                 self.initialized = True
@@ -750,10 +763,10 @@ class GoogleAdapter(BaseLLMAdapter):
     async def generate(
         self,
         prompt: str,
-        messages: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-        **kwargs
+        messages: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
+        model: str | None = None,
+        **kwargs,
     ) -> LLMResponse:
         start_time = time.time()
         self.total_requests += 1
@@ -882,10 +895,10 @@ class LocalAdapter(BaseLLMAdapter):
     async def generate(
         self,
         prompt: str,
-        messages: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
-        model: Optional[str] = None,
-        **kwargs
+        messages: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
+        model: str | None = None,
+        **kwargs,
     ) -> LLMResponse:
         start_time = time.time()
         self.total_requests += 1
@@ -956,7 +969,7 @@ class MultiLLMClient:
     - Batching for parallel requests
     """
 
-    def __init__(self, config: Optional[LLMConfig] = None):
+    def __init__(self, config: LLMConfig | None = None):
         """
         Initialize the multi-LLM client.
 
@@ -964,17 +977,14 @@ class MultiLLMClient:
             config: Configuration for the client
         """
         self.config = config or LLMConfig()
-        self.adapters: Dict[LLMProvider, BaseLLMAdapter] = {}
+        self.adapters: dict[LLMProvider, BaseLLMAdapter] = {}
 
         # Initialize adapters
         self._initialize_adapters()
 
         # Load balancer
         available = self.get_available_providers()
-        self.load_balancer = LoadBalancer(
-            available,
-            strategy=self.config.load_balance_strategy
-        )
+        self.load_balancer = LoadBalancer(available, strategy=self.config.load_balance_strategy)
 
         # Content classifier
         self.content_classifier = ContentClassifier()
@@ -1000,10 +1010,8 @@ class MultiLLMClient:
         logger.info(f"Available LLM providers: {available}")
 
     def _get_model_for_content(
-        self,
-        content_type: ContentType,
-        provider: LLMProvider
-    ) -> Optional[str]:
+        self, content_type: ContentType, provider: LLMProvider
+    ) -> str | None:
         """Get the appropriate model for content type and provider"""
         content_key = content_type.value
         if content_key in self.config.content_routing:
@@ -1015,15 +1023,15 @@ class MultiLLMClient:
     async def generate(
         self,
         prompt: str,
-        messages: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
-        provider: Optional[LLMProvider] = None,
-        model: Optional[str] = None,
+        messages: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
+        provider: LLMProvider | None = None,
+        model: str | None = None,
         enable_fallback: bool = True,
         enable_content_routing: bool = True,
         use_council: bool = False,
-        **kwargs
-    ) -> Dict[str, Any]:
+        **kwargs,
+    ) -> dict[str, Any]:
         """
         Generate a response using the specified or default LLM provider.
 
@@ -1044,10 +1052,7 @@ class MultiLLMClient:
         # Use council of experts if requested
         if use_council and self.config.enable_council:
             return await self._generate_with_council(
-                prompt=prompt,
-                messages=messages,
-                system_prompt=system_prompt,
-                **kwargs
+                prompt=prompt, messages=messages, system_prompt=system_prompt, **kwargs
             )
 
         # Classify content for routing
@@ -1081,7 +1086,7 @@ class MultiLLMClient:
                 messages=messages,
                 system_prompt=system_prompt,
                 model=effective_model,
-                **kwargs
+                **kwargs,
             )
 
             if response.success:
@@ -1112,10 +1117,10 @@ class MultiLLMClient:
     async def _generate_with_council(
         self,
         prompt: str,
-        messages: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
+        messages: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
+        **kwargs,
+    ) -> dict[str, Any]:
         """
         Generate using council of experts pattern.
 
@@ -1130,10 +1135,7 @@ class MultiLLMClient:
         Returns:
             Response dictionary with council metadata
         """
-        available_providers = [
-            p for p, a in self.adapters.items()
-            if a.is_available()
-        ]
+        available_providers = [p for p, a in self.adapters.items() if a.is_available()]
 
         if len(available_providers) < self.config.council_min_providers:
             logger.warning(
@@ -1145,7 +1147,7 @@ class MultiLLMClient:
                 messages=messages,
                 system_prompt=system_prompt,
                 use_council=False,
-                **kwargs
+                **kwargs,
             )
 
         # Query all available providers in parallel
@@ -1153,15 +1155,12 @@ class MultiLLMClient:
         for provider in available_providers:
             adapter = self.adapters[provider]
             task = adapter.generate(
-                prompt=prompt,
-                messages=messages,
-                system_prompt=system_prompt,
-                **kwargs
+                prompt=prompt, messages=messages, system_prompt=system_prompt, **kwargs
             )
             tasks.append((provider, task))
 
         # Gather results
-        responses: Dict[str, LLMResponse] = {}
+        responses: dict[str, LLMResponse] = {}
         for provider, task in tasks:
             try:
                 response = await task
@@ -1198,10 +1197,7 @@ class MultiLLMClient:
             "all_agree": council_result.all_agree,
         }
 
-    def _analyze_council_responses(
-        self,
-        responses: Dict[str, LLMResponse]
-    ) -> CouncilResult:
+    def _analyze_council_responses(self, responses: dict[str, LLMResponse]) -> CouncilResult:
         """
         Analyze council responses to find consensus.
 
@@ -1239,7 +1235,7 @@ class MultiLLMClient:
         # Calculate average similarity
         similarities = []
         for i, p1 in enumerate(providers):
-            for p2 in providers[i+1:]:
+            for p2 in providers[i + 1 :]:
                 sim = similarity(texts[p1], texts[p2])
                 similarities.append(sim)
 
@@ -1267,12 +1263,12 @@ class MultiLLMClient:
     def generate_sync(
         self,
         prompt: str,
-        messages: Optional[List[Dict[str, str]]] = None,
-        system_prompt: Optional[str] = None,
-        provider: Optional[LLMProvider] = None,
-        model: Optional[str] = None,
-        **kwargs
-    ) -> Dict[str, Any]:
+        messages: list[dict[str, str]] | None = None,
+        system_prompt: str | None = None,
+        provider: LLMProvider | None = None,
+        model: str | None = None,
+        **kwargs,
+    ) -> dict[str, Any]:
         """
         Synchronous wrapper for generate().
         """
@@ -1288,10 +1284,10 @@ class MultiLLMClient:
 
     async def generate_batch(
         self,
-        requests: List[Dict[str, Any]],
-        provider: Optional[LLMProvider] = None,
+        requests: list[dict[str, Any]],
+        provider: LLMProvider | None = None,
         concurrency: int = 5,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """
         Generate responses for multiple requests in parallel.
 
@@ -1305,7 +1301,7 @@ class MultiLLMClient:
         """
         semaphore = asyncio.Semaphore(concurrency)
 
-        async def bounded_generate(request: Dict[str, Any]) -> Dict[str, Any]:
+        async def bounded_generate(request: dict[str, Any]) -> dict[str, Any]:
             async with semaphore:
                 return await self.generate(
                     prompt=request.get("prompt", ""),
@@ -1313,17 +1309,15 @@ class MultiLLMClient:
                     system_prompt=request.get("system_prompt"),
                     provider=provider,
                     model=request.get("model"),
-                    **request.get("params", {})
+                    **request.get("params", {}),
                 )
 
         tasks = [bounded_generate(req) for req in requests]
         return await asyncio.gather(*tasks)
 
     def _get_provider_order(
-        self,
-        preferred: Optional[LLMProvider] = None,
-        content_type: ContentType = ContentType.GENERAL
-    ) -> List[LLMProvider]:
+        self, preferred: LLMProvider | None = None, content_type: ContentType = ContentType.GENERAL
+    ) -> list[LLMProvider]:
         """
         Get the order of providers to try based on content type and preferences.
 
@@ -1350,9 +1344,9 @@ class MultiLLMClient:
         # Apply load balancing if enabled
         if self.config.enable_load_balancing:
             available = [
-                p for p in fallback_names
-                if LLMProvider(p) in self.adapters and
-                self.adapters[LLMProvider(p)].is_available()
+                p
+                for p in fallback_names
+                if LLMProvider(p) in self.adapters and self.adapters[LLMProvider(p)].is_available()
             ]
             next_provider = self.load_balancer.get_next_provider(available)
             if next_provider and LLMProvider(next_provider) not in order:
@@ -1369,7 +1363,7 @@ class MultiLLMClient:
 
         return order
 
-    def get_provider_status(self) -> Dict[str, Dict[str, Any]]:
+    def get_provider_status(self) -> dict[str, dict[str, Any]]:
         """
         Get status of all providers.
 
@@ -1384,9 +1378,7 @@ class MultiLLMClient:
                 "total_requests": adapter.total_requests,
                 "successful_requests": adapter.successful_requests,
                 "failed_requests": adapter.failed_requests,
-                "success_rate": (
-                    adapter.successful_requests / max(1, adapter.total_requests)
-                ),
+                "success_rate": (adapter.successful_requests / max(1, adapter.total_requests)),
                 "current_load": adapter.get_load(),
                 "last_error": adapter.last_error,
                 "last_error_time": (
@@ -1395,7 +1387,7 @@ class MultiLLMClient:
             }
         return status
 
-    def get_available_providers(self) -> List[str]:
+    def get_available_providers(self) -> list[str]:
         """Get list of available provider names"""
         return [p.value for p, a in self.adapters.items() if a.is_available()]
 
@@ -1404,7 +1396,7 @@ class MultiLLMClient:
         adapter = self.adapters.get(provider)
         return adapter.is_available() if adapter else False
 
-    async def health_check(self) -> Dict[str, bool]:
+    async def health_check(self) -> dict[str, bool]:
         """
         Perform health check on all providers.
 
@@ -1433,12 +1425,12 @@ class MultiLLMClient:
 
 # Convenience function for quick access
 def create_llm_client(
-    anthropic_key: Optional[str] = None,
-    openai_key: Optional[str] = None,
-    google_key: Optional[str] = None,
+    anthropic_key: str | None = None,
+    openai_key: str | None = None,
+    google_key: str | None = None,
     enable_council: bool = True,
     enable_load_balancing: bool = True,
-    **kwargs
+    **kwargs,
 ) -> MultiLLMClient:
     """
     Create a configured MultiLLMClient.
@@ -1460,6 +1452,6 @@ def create_llm_client(
         google_api_key=google_key,
         enable_council=enable_council,
         enable_load_balancing=enable_load_balancing,
-        **kwargs
+        **kwargs,
     )
     return MultiLLMClient(config)

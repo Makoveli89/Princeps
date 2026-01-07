@@ -21,21 +21,21 @@ Adapted from patterns in:
 """
 
 import asyncio
+import json
 import logging
 import re
-import json
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
-from collections import Counter
-import hashlib
+from typing import Any
 
 logger = logging.getLogger(__name__)
 
 
 class VotingStrategy(Enum):
     """Strategy for selecting the best plan from council responses"""
+
     MAJORITY_VOTE = "majority_vote"  # Vote on common elements
     CONFIDENCE_WEIGHTED = "confidence_weighted"  # Weight by model confidence
     LLM_JUDGE = "llm_judge"  # Use another LLM to judge
@@ -46,6 +46,7 @@ class VotingStrategy(Enum):
 
 class PlanQuality(Enum):
     """Quality assessment levels for plans"""
+
     EXCELLENT = "excellent"
     GOOD = "good"
     ACCEPTABLE = "acceptable"
@@ -56,13 +57,14 @@ class PlanQuality(Enum):
 @dataclass
 class CouncilMember:
     """Represents an LLM in the council"""
+
     provider: str
     model: str
     weight: float = 1.0  # Weight in voting (can be adjusted based on performance)
-    specialty: Optional[str] = None  # e.g., "code", "reasoning", "creativity"
+    specialty: str | None = None  # e.g., "code", "reasoning", "creativity"
     reliability_score: float = 1.0  # Track historical performance
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "provider": self.provider,
             "model": self.model,
@@ -75,22 +77,27 @@ class CouncilMember:
 @dataclass
 class PlanProposal:
     """A plan proposal from a council member"""
+
     member: CouncilMember
     raw_response: str
-    steps: List[str] = field(default_factory=list)
-    structured_plan: Optional[Dict[str, Any]] = None
+    steps: list[str] = field(default_factory=list)
+    structured_plan: dict[str, Any] | None = None
     confidence_score: float = 0.0
-    reasoning: Optional[str] = None
-    estimated_complexity: Optional[str] = None
-    risks: List[str] = field(default_factory=list)
-    dependencies: List[str] = field(default_factory=list)
+    reasoning: str | None = None
+    estimated_complexity: str | None = None
+    risks: list[str] = field(default_factory=list)
+    dependencies: list[str] = field(default_factory=list)
     latency_ms: float = 0.0
     timestamp: datetime = field(default_factory=datetime.now)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "member": self.member.to_dict(),
-            "raw_response": self.raw_response[:500] + "..." if len(self.raw_response) > 500 else self.raw_response,
+            "raw_response": (
+                self.raw_response[:500] + "..."
+                if len(self.raw_response) > 500
+                else self.raw_response
+            ),
             "steps": self.steps,
             "structured_plan": self.structured_plan,
             "confidence_score": self.confidence_score,
@@ -106,18 +113,19 @@ class PlanProposal:
 @dataclass
 class CouncilDecision:
     """Final decision from the council deliberation"""
+
     winning_proposal: PlanProposal
-    all_proposals: List[PlanProposal]
+    all_proposals: list[PlanProposal]
     voting_strategy: VotingStrategy
     agreement_score: float  # 0-1 how much the council agreed
-    consensus_steps: List[str]  # Steps that multiple members agreed on
-    dissenting_views: List[str]  # Notable disagreements
+    consensus_steps: list[str]  # Steps that multiple members agreed on
+    dissenting_views: list[str]  # Notable disagreements
     quality_assessment: PlanQuality
     confidence_score: float
     deliberation_summary: str
     timestamp: datetime = field(default_factory=datetime.now)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         return {
             "winning_proposal": self.winning_proposal.to_dict(),
             "voting_strategy": self.voting_strategy.value,
@@ -135,11 +143,12 @@ class CouncilDecision:
 @dataclass
 class JudgeVerdict:
     """Verdict from the LLM judge"""
+
     winner_index: int
     winner_provider: str
     reasoning: str
-    scores: Dict[str, float]  # provider -> score
-    improvement_suggestions: List[str]
+    scores: dict[str, float]  # provider -> score
+    improvement_suggestions: list[str]
     quality_assessment: PlanQuality
     confidence: float
 
@@ -149,17 +158,17 @@ class PlanParser:
 
     # Patterns for detecting plan steps
     STEP_PATTERNS = [
-        r'^\s*\d+[\.\)]\s*(.+)$',  # "1. Step" or "1) Step"
-        r'^\s*[-*•]\s*(.+)$',  # "- Step" or "* Step"
-        r'^\s*Step\s+\d+[:\s]+(.+)$',  # "Step 1: description"
-        r'^##\s+(.+)$',  # "## Step"
+        r"^\s*\d+[\.\)]\s*(.+)$",  # "1. Step" or "1) Step"
+        r"^\s*[-*•]\s*(.+)$",  # "- Step" or "* Step"
+        r"^\s*Step\s+\d+[:\s]+(.+)$",  # "Step 1: description"
+        r"^##\s+(.+)$",  # "## Step"
     ]
 
     @classmethod
-    def extract_steps(cls, text: str) -> List[str]:
+    def extract_steps(cls, text: str) -> list[str]:
         """Extract plan steps from response text"""
         steps = []
-        lines = text.split('\n')
+        lines = text.split("\n")
 
         for line in lines:
             line = line.strip()
@@ -177,12 +186,12 @@ class PlanParser:
         return steps
 
     @classmethod
-    def extract_json_plan(cls, text: str) -> Optional[Dict[str, Any]]:
+    def extract_json_plan(cls, text: str) -> dict[str, Any] | None:
         """Try to extract JSON-formatted plan from response"""
         # Look for JSON code blocks
         json_patterns = [
-            r'```json\s*\n([\s\S]*?)\n```',
-            r'```\s*\n([\s\S]*?)\n```',
+            r"```json\s*\n([\s\S]*?)\n```",
+            r"```\s*\n([\s\S]*?)\n```",
             r'\{[\s\S]*"steps"[\s\S]*\}',
         ]
 
@@ -190,7 +199,7 @@ class PlanParser:
             match = re.search(pattern, text)
             if match:
                 try:
-                    json_str = match.group(1) if '```' in pattern else match.group(0)
+                    json_str = match.group(1) if "```" in pattern else match.group(0)
                     return json.loads(json_str)
                 except (json.JSONDecodeError, IndexError):
                     continue
@@ -198,7 +207,7 @@ class PlanParser:
         return None
 
     @classmethod
-    def estimate_confidence(cls, text: str, steps: List[str]) -> float:
+    def estimate_confidence(cls, text: str, steps: list[str]) -> float:
         """Estimate confidence score based on response quality"""
         score = 0.5  # Base score
 
@@ -209,8 +218,8 @@ class PlanParser:
             score += 0.05
 
         # Check for confidence indicators
-        confidence_positive = ['definitely', 'clearly', 'recommend', 'best approach', 'optimal']
-        confidence_negative = ['maybe', 'perhaps', 'not sure', 'uncertain', 'alternatively']
+        confidence_positive = ["definitely", "clearly", "recommend", "best approach", "optimal"]
+        confidence_negative = ["maybe", "perhaps", "not sure", "uncertain", "alternatively"]
 
         text_lower = text.lower()
         for indicator in confidence_positive:
@@ -221,13 +230,13 @@ class PlanParser:
                 score -= 0.05
 
         # Check for reasoning/justification
-        reasoning_indicators = ['because', 'since', 'therefore', 'this ensures', 'the reason']
+        reasoning_indicators = ["because", "since", "therefore", "this ensures", "the reason"]
         for indicator in reasoning_indicators:
             if indicator in text_lower:
                 score += 0.03
 
         # Check for risk awareness
-        risk_indicators = ['risk', 'caveat', 'consideration', 'be aware', 'potential issue']
+        risk_indicators = ["risk", "caveat", "consideration", "be aware", "potential issue"]
         for indicator in risk_indicators:
             if indicator in text_lower:
                 score += 0.02
@@ -235,12 +244,12 @@ class PlanParser:
         return max(0.0, min(1.0, score))
 
     @classmethod
-    def extract_risks(cls, text: str) -> List[str]:
+    def extract_risks(cls, text: str) -> list[str]:
         """Extract mentioned risks from the plan"""
         risks = []
         risk_patterns = [
-            r'(?:risk|caveat|warning|consideration|potential issue)[:\s]+([^.]+\.)',
-            r'(?:be aware|note that|keep in mind)[:\s]+([^.]+\.)',
+            r"(?:risk|caveat|warning|consideration|potential issue)[:\s]+([^.]+\.)",
+            r"(?:be aware|note that|keep in mind)[:\s]+([^.]+\.)",
         ]
 
         for pattern in risk_patterns:
@@ -305,16 +314,16 @@ class LLMCouncil:
         self.enable_judge = enable_judge
 
         # Council members
-        self.members: List[CouncilMember] = []
+        self.members: list[CouncilMember] = []
 
         # Performance tracking per member
-        self.member_stats: Dict[str, Dict[str, Any]] = {}
+        self.member_stats: dict[str, dict[str, Any]] = {}
 
         # Parser for plan extraction
         self.parser = PlanParser()
 
         # Deliberation history
-        self.deliberation_history: List[CouncilDecision] = []
+        self.deliberation_history: list[CouncilDecision] = []
 
         logger.info("LLMCouncil initialized")
 
@@ -323,7 +332,7 @@ class LLMCouncil:
         provider: str,
         model: str,
         weight: float = 1.0,
-        specialty: Optional[str] = None,
+        specialty: str | None = None,
     ) -> CouncilMember:
         """
         Add a member to the council.
@@ -377,11 +386,11 @@ class LLMCouncil:
     async def query_all(
         self,
         prompt: str,
-        system_prompt: Optional[str] = None,
-        members: Optional[List[CouncilMember]] = None,
+        system_prompt: str | None = None,
+        members: list[CouncilMember] | None = None,
         timeout_seconds: float = 60.0,
-        **kwargs
-    ) -> List[PlanProposal]:
+        **kwargs,
+    ) -> list[PlanProposal]:
         """
         Query all council members in parallel.
 
@@ -405,8 +414,9 @@ class LLMCouncil:
         logger.info(f"Querying {len(target_members)} council members")
 
         # Create tasks for parallel execution
-        async def query_member(member: CouncilMember) -> Optional[PlanProposal]:
+        async def query_member(member: CouncilMember) -> PlanProposal | None:
             import time
+
             start_time = time.time()
 
             try:
@@ -433,9 +443,9 @@ class LLMCouncil:
                         provider=provider_enum,
                         model=member.model,
                         enable_fallback=False,  # Don't fallback within council query
-                        **kwargs
+                        **kwargs,
                     ),
-                    timeout=timeout_seconds
+                    timeout=timeout_seconds,
                 )
 
                 latency_ms = (time.time() - start_time) * 1000
@@ -459,7 +469,7 @@ class LLMCouncil:
                     stats["queries"] += 1
                     stats["total_confidence"] += confidence
                     n = stats["queries"]
-                    stats["avg_latency_ms"] = (stats["avg_latency_ms"] * (n-1) + latency_ms) / n
+                    stats["avg_latency_ms"] = (stats["avg_latency_ms"] * (n - 1) + latency_ms) / n
 
                 return PlanProposal(
                     member=member,
@@ -495,9 +505,9 @@ class LLMCouncil:
 
     async def evaluate_responses(
         self,
-        proposals: List[PlanProposal],
-        strategy: Optional[VotingStrategy] = None,
-        task_context: Optional[str] = None,
+        proposals: list[PlanProposal],
+        strategy: VotingStrategy | None = None,
+        task_context: str | None = None,
     ) -> CouncilDecision:
         """
         Evaluate multiple proposals and select the best plan.
@@ -549,7 +559,9 @@ class LLMCouncil:
             decision = self._similarity_consensus(proposals)
 
         # Update winner's stats
-        winner_key = f"{decision.winning_proposal.member.provider}:{decision.winning_proposal.member.model}"
+        winner_key = (
+            f"{decision.winning_proposal.member.provider}:{decision.winning_proposal.member.model}"
+        )
         if winner_key in self.member_stats:
             self.member_stats[winner_key]["wins"] += 1
 
@@ -563,7 +575,7 @@ class LLMCouncil:
 
         return decision
 
-    def _majority_vote(self, proposals: List[PlanProposal]) -> CouncilDecision:
+    def _majority_vote(self, proposals: list[PlanProposal]) -> CouncilDecision:
         """Vote on common steps across proposals"""
         # Count step occurrences (normalized)
         all_steps = []
@@ -591,8 +603,7 @@ class LLMCouncil:
         if consensus_steps:
             max_possible = len(proposals)
             avg_agreement = sum(
-                step_counter.get(cs, 0) / max_possible
-                for cs in consensus_steps
+                step_counter.get(cs, 0) / max_possible for cs in consensus_steps
             ) / len(consensus_steps)
         else:
             avg_agreement = 0.0
@@ -609,12 +620,16 @@ class LLMCouncil:
             deliberation_summary=f"Majority vote selected {winner.member.provider} with {len(consensus_steps)} consensus steps",
         )
 
-    def _confidence_weighted_vote(self, proposals: List[PlanProposal]) -> CouncilDecision:
+    def _confidence_weighted_vote(self, proposals: list[PlanProposal]) -> CouncilDecision:
         """Weight votes by confidence scores and member weights"""
         # Calculate weighted scores
         scores = {}
         for proposal in proposals:
-            weighted_score = proposal.confidence_score * proposal.member.weight * proposal.member.reliability_score
+            weighted_score = (
+                proposal.confidence_score
+                * proposal.member.weight
+                * proposal.member.reliability_score
+            )
             scores[id(proposal)] = weighted_score
 
         # Select winner
@@ -644,8 +659,9 @@ class LLMCouncil:
             ),
         )
 
-    def _similarity_consensus(self, proposals: List[PlanProposal]) -> CouncilDecision:
+    def _similarity_consensus(self, proposals: list[PlanProposal]) -> CouncilDecision:
         """Find the most central/representative proposal"""
+
         # Calculate pairwise similarity between proposals
         def text_similarity(text1: str, text2: str) -> float:
             words1 = set(text1.lower().split())
@@ -676,7 +692,9 @@ class LLMCouncil:
                     best_proposal = p1
 
         # Overall agreement is average pairwise similarity
-        overall_agreement = sum(all_similarities) / len(all_similarities) if all_similarities else 0.5
+        overall_agreement = (
+            sum(all_similarities) / len(all_similarities) if all_similarities else 0.5
+        )
 
         return CouncilDecision(
             winning_proposal=best_proposal,
@@ -693,15 +711,15 @@ class LLMCouncil:
             ),
         )
 
-    def _step_intersection(self, proposals: List[PlanProposal]) -> CouncilDecision:
+    def _step_intersection(self, proposals: list[PlanProposal]) -> CouncilDecision:
         """Combine common steps from all proposals"""
         # Collect and normalize all steps
-        step_sources: Dict[str, List[Tuple[str, PlanProposal]]] = {}
+        step_sources: dict[str, list[tuple[str, PlanProposal]]] = {}
 
         for proposal in proposals:
             for step in proposal.steps:
                 # Create a normalized key for matching similar steps
-                normalized = ' '.join(sorted(step.lower().split()[:5]))
+                normalized = " ".join(sorted(step.lower().split()[:5]))
                 if normalized not in step_sources:
                     step_sources[normalized] = []
                 step_sources[normalized].append((step, proposal))
@@ -722,10 +740,10 @@ class LLMCouncil:
         winner = max(
             proposals,
             key=lambda p: sum(
-                1 for s in p.steps
-                if any(cs.lower() in s.lower() or s.lower() in cs.lower()
-                       for cs, _ in common_steps)
-            )
+                1
+                for s in p.steps
+                if any(cs.lower() in s.lower() or s.lower() in cs.lower() for cs, _ in common_steps)
+            ),
         )
 
         # Agreement based on step overlap
@@ -751,8 +769,8 @@ class LLMCouncil:
 
     async def _llm_judge_vote(
         self,
-        proposals: List[PlanProposal],
-        task_context: Optional[str] = None,
+        proposals: list[PlanProposal],
+        task_context: str | None = None,
     ) -> CouncilDecision:
         """Use an LLM as a judge to evaluate proposals"""
         if not self.llm_client or not self.enable_judge:
@@ -797,10 +815,10 @@ class LLMCouncil:
         logger.warning("Falling back to similarity consensus")
         return self._similarity_consensus(proposals)
 
-    def _ranked_choice_vote(self, proposals: List[PlanProposal]) -> CouncilDecision:
+    def _ranked_choice_vote(self, proposals: list[PlanProposal]) -> CouncilDecision:
         """Ranked choice voting based on multiple criteria"""
         # Score each proposal on multiple dimensions
-        scores: Dict[int, Dict[str, float]] = {}
+        scores: dict[int, dict[str, float]] = {}
 
         for i, proposal in enumerate(proposals):
             scores[i] = {
@@ -845,8 +863,8 @@ class LLMCouncil:
 
     def _build_judge_prompt(
         self,
-        proposals: List[PlanProposal],
-        task_context: Optional[str] = None,
+        proposals: list[PlanProposal],
+        task_context: str | None = None,
     ) -> str:
         """Build the prompt for the LLM judge"""
         prompt_parts = [
@@ -856,39 +874,45 @@ class LLMCouncil:
         ]
 
         if task_context:
-            prompt_parts.extend([
-                "TASK CONTEXT:",
-                task_context,
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    "TASK CONTEXT:",
+                    task_context,
+                    "",
+                ]
+            )
 
         prompt_parts.append("PROPOSALS TO EVALUATE:")
         prompt_parts.append("")
 
         for i, proposal in enumerate(proposals):
-            prompt_parts.extend([
-                f"--- PROPOSAL {i + 1} (from {proposal.member.provider}/{proposal.member.model}) ---",
-                proposal.raw_response[:2000],
-                "",
-            ])
+            prompt_parts.extend(
+                [
+                    f"--- PROPOSAL {i + 1} (from {proposal.member.provider}/{proposal.member.model}) ---",
+                    proposal.raw_response[:2000],
+                    "",
+                ]
+            )
 
-        prompt_parts.extend([
-            "",
-            "EVALUATION CRITERIA:",
-            "1. Completeness - Does the plan address all aspects of the task?",
-            "2. Clarity - Are the steps clear and actionable?",
-            "3. Feasibility - Is the plan realistic and implementable?",
-            "4. Risk Awareness - Does the plan consider potential issues?",
-            "5. Efficiency - Is the approach appropriately streamlined?",
-            "",
-            "RESPONSE FORMAT:",
-            "Please respond with:",
-            "WINNER: [proposal number 1-N]",
-            "QUALITY: [excellent/good/acceptable/poor]",
-            "CONFIDENCE: [0.0-1.0]",
-            "REASONING: [your explanation]",
-            "IMPROVEMENTS: [suggestions for the winning plan]",
-        ])
+        prompt_parts.extend(
+            [
+                "",
+                "EVALUATION CRITERIA:",
+                "1. Completeness - Does the plan address all aspects of the task?",
+                "2. Clarity - Are the steps clear and actionable?",
+                "3. Feasibility - Is the plan realistic and implementable?",
+                "4. Risk Awareness - Does the plan consider potential issues?",
+                "5. Efficiency - Is the approach appropriately streamlined?",
+                "",
+                "RESPONSE FORMAT:",
+                "Please respond with:",
+                "WINNER: [proposal number 1-N]",
+                "QUALITY: [excellent/good/acceptable/poor]",
+                "CONFIDENCE: [0.0-1.0]",
+                "REASONING: [your explanation]",
+                "IMPROVEMENTS: [suggestions for the winning plan]",
+            ]
+        )
 
         return "\n".join(prompt_parts)
 
@@ -907,16 +931,16 @@ Focus on practical value and implementation feasibility."""
     def _parse_judge_verdict(
         self,
         response: str,
-        proposals: List[PlanProposal],
-    ) -> Optional[JudgeVerdict]:
+        proposals: list[PlanProposal],
+    ) -> JudgeVerdict | None:
         """Parse the judge's response into a verdict"""
         try:
             # Extract winner
-            winner_match = re.search(r'WINNER:\s*(\d+)', response, re.IGNORECASE)
+            winner_match = re.search(r"WINNER:\s*(\d+)", response, re.IGNORECASE)
             winner_idx = int(winner_match.group(1)) - 1 if winner_match else 0
 
             # Extract quality
-            quality_match = re.search(r'QUALITY:\s*(\w+)', response, re.IGNORECASE)
+            quality_match = re.search(r"QUALITY:\s*(\w+)", response, re.IGNORECASE)
             quality_str = quality_match.group(1).lower() if quality_match else "acceptable"
             quality_map = {
                 "excellent": PlanQuality.EXCELLENT,
@@ -927,22 +951,30 @@ Focus on practical value and implementation feasibility."""
             quality = quality_map.get(quality_str, PlanQuality.ACCEPTABLE)
 
             # Extract confidence
-            conf_match = re.search(r'CONFIDENCE:\s*([\d.]+)', response, re.IGNORECASE)
+            conf_match = re.search(r"CONFIDENCE:\s*([\d.]+)", response, re.IGNORECASE)
             confidence = float(conf_match.group(1)) if conf_match else 0.7
 
             # Extract reasoning
-            reason_match = re.search(r'REASONING:\s*(.+?)(?=IMPROVEMENTS:|$)', response, re.IGNORECASE | re.DOTALL)
+            reason_match = re.search(
+                r"REASONING:\s*(.+?)(?=IMPROVEMENTS:|$)", response, re.IGNORECASE | re.DOTALL
+            )
             reasoning = reason_match.group(1).strip() if reason_match else "No reasoning provided"
 
             # Extract improvements
-            improve_match = re.search(r'IMPROVEMENTS:\s*(.+?)$', response, re.IGNORECASE | re.DOTALL)
+            improve_match = re.search(
+                r"IMPROVEMENTS:\s*(.+?)$", response, re.IGNORECASE | re.DOTALL
+            )
             improvements = []
             if improve_match:
-                improvements = [s.strip() for s in improve_match.group(1).split('\n') if s.strip()]
+                improvements = [s.strip() for s in improve_match.group(1).split("\n") if s.strip()]
 
             return JudgeVerdict(
                 winner_index=winner_idx,
-                winner_provider=proposals[winner_idx].member.provider if 0 <= winner_idx < len(proposals) else "",
+                winner_provider=(
+                    proposals[winner_idx].member.provider
+                    if 0 <= winner_idx < len(proposals)
+                    else ""
+                ),
                 reasoning=reasoning,
                 scores={},  # Could extract individual scores if needed
                 improvement_suggestions=improvements[:5],
@@ -956,9 +988,9 @@ Focus on practical value and implementation feasibility."""
 
     def _find_dissenting_views(
         self,
-        proposals: List[PlanProposal],
+        proposals: list[PlanProposal],
         winner: PlanProposal,
-    ) -> List[str]:
+    ) -> list[str]:
         """Find notable differences from non-winning proposals"""
         dissenting = []
 
@@ -989,7 +1021,7 @@ Focus on practical value and implementation feasibility."""
         else:
             return PlanQuality.REJECTED
 
-    def get_member_stats(self) -> Dict[str, Dict[str, Any]]:
+    def get_member_stats(self) -> dict[str, dict[str, Any]]:
         """Get performance statistics for all members"""
         stats = {}
         for key, data in self.member_stats.items():
@@ -1008,14 +1040,16 @@ Focus on practical value and implementation feasibility."""
                 alpha = 0.1
                 outcome = 1.0 if success else 0.0
                 member.reliability_score = (1 - alpha) * member.reliability_score + alpha * outcome
-                logger.debug(f"Updated reliability for {provider}/{model}: {member.reliability_score:.2f}")
+                logger.debug(
+                    f"Updated reliability for {provider}/{model}: {member.reliability_score:.2f}"
+                )
                 return
 
 
 # Convenience function for quick council creation
 def create_council(
     llm_client,
-    providers: Optional[List[str]] = None,
+    providers: list[str] | None = None,
     strategy: VotingStrategy = VotingStrategy.SIMILARITY_CONSENSUS,
 ) -> LLMCouncil:
     """

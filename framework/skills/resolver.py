@@ -8,23 +8,24 @@ extracting the necessary parameters.
 
 import json
 import logging
-from typing import Dict, Any, Optional, Tuple, List
+from typing import Any
 
-from framework.llms.multi_llm_client import MultiLLMClient, LLMProvider
+from framework.llms.multi_llm_client import LLMProvider, MultiLLMClient
 from framework.skills.registry import get_registry
 
 logger = logging.getLogger(__name__)
+
 
 class SkillResolver:
     """
     Resolves natural language queries to specific Skills and their parameters.
     """
 
-    def __init__(self, llm_client: Optional[MultiLLMClient] = None):
+    def __init__(self, llm_client: MultiLLMClient | None = None):
         self.llm_client = llm_client or MultiLLMClient()
         self.registry = get_registry()
 
-    async def resolve(self, query: str) -> Tuple[Optional[str], Dict[str, Any]]:
+    async def resolve(self, query: str) -> tuple[str | None, dict[str, Any]]:
         """
         Analyze the query and return the matched skill name and parameters.
 
@@ -46,8 +47,8 @@ class SkillResolver:
             response = await self.llm_client.generate(
                 prompt=query,
                 system_prompt=system_prompt,
-                provider=LLMProvider.ANTHROPIC, # Prefer Anthropic for complex reasoning
-                temperature=0.0
+                provider=LLMProvider.ANTHROPIC,  # Prefer Anthropic for complex reasoning
+                temperature=0.0,
             )
 
             text_response = response["text"]
@@ -70,7 +71,7 @@ class SkillResolver:
             logger.error(f"Skill resolution failed: {e}")
             return None, {}
 
-    def _build_system_prompt(self, skills: List[Dict[str, Any]]) -> str:
+    def _build_system_prompt(self, skills: list[dict[str, Any]]) -> str:
         """
         Build the system prompt listing available skills.
         """
@@ -100,7 +101,7 @@ You must output ONLY a valid JSON object. Do not include markdown formatting or 
 }}
 """
 
-    def _parse_response(self, text: str) -> Optional[Dict[str, Any]]:
+    def _parse_response(self, text: str) -> dict[str, Any] | None:
         """
         Parse the LLM response to extraction JSON.
         Handles potential Markdown wrapping (```json ... ```).

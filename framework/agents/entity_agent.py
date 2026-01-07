@@ -30,14 +30,14 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from framework.agents.base_agent import (
-    BaseAgent,
-    AgentTask,
-    AgentResponse,
     AgentConfig,
     AgentContext,
+    AgentResponse,
+    AgentTask,
+    BaseAgent,
     TaskStatus,
 )
 from framework.agents.brain_logger import BrainLogger, get_brain_logger
@@ -54,8 +54,10 @@ logger = logging.getLogger(__name__)
 # Enums and Configuration
 # =============================================================================
 
+
 class EntityLabel(Enum):
     """Named entity types (aligned with spaCy and models.py)."""
+
     PERSON = "PERSON"
     ORG = "ORG"
     GPE = "GPE"  # Geo-political entity (country, city, state)
@@ -85,6 +87,7 @@ class EntityLabel(Enum):
 
 class NERModel(Enum):
     """Supported NER models."""
+
     SPACY_SM = "en_core_web_sm"
     SPACY_MD = "en_core_web_md"
     SPACY_LG = "en_core_web_lg"
@@ -98,7 +101,7 @@ class EntityConfig:
 
     # Model settings
     model: NERModel = NERModel.SPACY_LG
-    fallback_models: List[NERModel] = field(
+    fallback_models: list[NERModel] = field(
         default_factory=lambda: [
             NERModel.SPACY_MD,
             NERModel.SPACY_SM,
@@ -114,14 +117,14 @@ class EntityConfig:
     normalize_case: bool = True
 
     # Labels to extract (None = all)
-    include_labels: Optional[List[EntityLabel]] = None
-    exclude_labels: Optional[List[EntityLabel]] = field(
+    include_labels: list[EntityLabel] | None = None
+    exclude_labels: list[EntityLabel] | None = field(
         default_factory=lambda: [EntityLabel.CARDINAL, EntityLabel.ORDINAL]
     )
 
     # PII handling
     flag_pii: bool = True
-    pii_labels: List[EntityLabel] = field(
+    pii_labels: list[EntityLabel] = field(
         default_factory=lambda: [EntityLabel.PERSON, EntityLabel.MONEY]
     )
 
@@ -143,10 +146,10 @@ class ExtractedEntity:
     end_char: int
     confidence: float = 1.0
     is_pii: bool = False
-    normalized_text: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    normalized_text: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "text": self.text,
@@ -165,16 +168,16 @@ class EntityExtractionResult:
     """Result from entity extraction."""
 
     source_id: str
-    entities: List[ExtractedEntity]
-    entities_by_label: Dict[str, List[str]]  # label -> [entity texts]
+    entities: list[ExtractedEntity]
+    entities_by_label: dict[str, list[str]]  # label -> [entity texts]
     total_entities: int
     unique_entities: int
     processing_time_ms: float = 0.0
     model_used: str = ""
     pii_detected: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "source_id": self.source_id,
@@ -192,6 +195,7 @@ class EntityExtractionResult:
 # =============================================================================
 # EntityExtractionAgent Implementation
 # =============================================================================
+
 
 class EntityExtractionAgent(BaseAgent):
     """
@@ -214,10 +218,10 @@ class EntityExtractionAgent(BaseAgent):
 
     def __init__(
         self,
-        config: Optional[AgentConfig] = None,
-        entity_config: Optional[EntityConfig] = None,
-        context: Optional[AgentContext] = None,
-        brain_logger: Optional[BrainLogger] = None,
+        config: AgentConfig | None = None,
+        entity_config: EntityConfig | None = None,
+        context: AgentContext | None = None,
+        brain_logger: BrainLogger | None = None,
     ):
         super().__init__(config=config, context=context)
 
@@ -253,10 +257,7 @@ class EntityExtractionAgent(BaseAgent):
                 logger.info(f"Loading spaCy model: {model.value}")
 
                 loop = asyncio.get_event_loop()
-                self._nlp = await loop.run_in_executor(
-                    None,
-                    lambda: spacy.load(model.value)
-                )
+                self._nlp = await loop.run_in_executor(None, lambda: spacy.load(model.value))
                 self._nlp_model = model
 
                 logger.info(f"Loaded spaCy model: {model.value}")
@@ -279,8 +280,8 @@ class EntityExtractionAgent(BaseAgent):
     async def extract_entities(
         self,
         content: str,
-        source_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        source_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> EntityExtractionResult:
         """
         Extract named entities from content.
@@ -301,7 +302,7 @@ class EntityExtractionAgent(BaseAgent):
 
         # Truncate if too long
         if len(content) > self.entity_config.max_text_length:
-            content = content[:self.entity_config.max_text_length]
+            content = content[: self.entity_config.max_text_length]
 
         # Log start
         run_id = str(uuid.uuid4())
@@ -372,7 +373,7 @@ class EntityExtractionAgent(BaseAgent):
     async def _extract_with_fallback(
         self,
         content: str,
-    ) -> List[ExtractedEntity]:
+    ) -> list[ExtractedEntity]:
         """Try extraction models in priority order."""
         models_to_try = [self.entity_config.model] + self.entity_config.fallback_models
 
@@ -394,7 +395,7 @@ class EntityExtractionAgent(BaseAgent):
         self,
         content: str,
         nlp: Any,
-    ) -> List[ExtractedEntity]:
+    ) -> list[ExtractedEntity]:
         """Extract entities using spaCy."""
         try:
             loop = asyncio.get_event_loop()
@@ -410,15 +411,19 @@ class EntityExtractionAgent(BaseAgent):
 
                 is_pii = label in self.entity_config.pii_labels
 
-                entities.append(ExtractedEntity(
-                    text=ent.text,
-                    label=label,
-                    start_char=ent.start_char,
-                    end_char=ent.end_char,
-                    confidence=1.0,  # spaCy doesn't provide confidence
-                    is_pii=is_pii,
-                    normalized_text=ent.text.lower().strip() if self.entity_config.normalize_case else None,
-                ))
+                entities.append(
+                    ExtractedEntity(
+                        text=ent.text,
+                        label=label,
+                        start_char=ent.start_char,
+                        end_char=ent.end_char,
+                        confidence=1.0,  # spaCy doesn't provide confidence
+                        is_pii=is_pii,
+                        normalized_text=(
+                            ent.text.lower().strip() if self.entity_config.normalize_case else None
+                        ),
+                    )
+                )
 
             return entities
 
@@ -429,7 +434,7 @@ class EntityExtractionAgent(BaseAgent):
     async def _extract_with_llm(
         self,
         content: str,
-    ) -> List[ExtractedEntity]:
+    ) -> list[ExtractedEntity]:
         """Extract entities using LLM."""
         try:
             prompt = f"""Extract named entities from the following text. For each entity, provide:
@@ -475,15 +480,19 @@ New York | GPE"""
                 start_char = content.find(text)
                 end_char = start_char + len(text) if start_char >= 0 else 0
 
-                entities.append(ExtractedEntity(
-                    text=text,
-                    label=label,
-                    start_char=start_char,
-                    end_char=end_char,
-                    confidence=0.8,  # LLM extractions have lower confidence
-                    is_pii=is_pii,
-                    normalized_text=text.lower().strip() if self.entity_config.normalize_case else None,
-                ))
+                entities.append(
+                    ExtractedEntity(
+                        text=text,
+                        label=label,
+                        start_char=start_char,
+                        end_char=end_char,
+                        confidence=0.8,  # LLM extractions have lower confidence
+                        is_pii=is_pii,
+                        normalized_text=(
+                            text.lower().strip() if self.entity_config.normalize_case else None
+                        ),
+                    )
+                )
 
             return entities
 
@@ -497,8 +506,8 @@ New York | GPE"""
 
     def _filter_entities(
         self,
-        entities: List[ExtractedEntity],
-    ) -> List[ExtractedEntity]:
+        entities: list[ExtractedEntity],
+    ) -> list[ExtractedEntity]:
         """Filter entities based on configuration."""
         filtered = []
 
@@ -529,10 +538,10 @@ New York | GPE"""
 
     def _deduplicate_entities(
         self,
-        entities: List[ExtractedEntity],
-    ) -> List[ExtractedEntity]:
+        entities: list[ExtractedEntity],
+    ) -> list[ExtractedEntity]:
         """Deduplicate entities, keeping highest confidence."""
-        seen: Dict[Tuple[str, EntityLabel], ExtractedEntity] = {}
+        seen: dict[tuple[str, EntityLabel], ExtractedEntity] = {}
 
         for entity in entities:
             key = (entity.text.lower(), entity.label)
@@ -544,10 +553,10 @@ New York | GPE"""
 
     def _group_by_label(
         self,
-        entities: List[ExtractedEntity],
-    ) -> Dict[str, List[str]]:
+        entities: list[ExtractedEntity],
+    ) -> dict[str, list[str]]:
         """Group entity texts by label."""
-        grouped: Dict[str, List[str]] = {}
+        grouped: dict[str, list[str]] = {}
 
         for entity in entities:
             label = entity.label.value
@@ -564,9 +573,9 @@ New York | GPE"""
 
     async def extract_entities_batch(
         self,
-        items: List[Tuple[str, str]],  # [(content, source_id), ...]
+        items: list[tuple[str, str]],  # [(content, source_id), ...]
         max_concurrent: int = 5,
-    ) -> List[EntityExtractionResult]:
+    ) -> list[EntityExtractionResult]:
         """
         Extract entities from multiple documents in parallel.
 
@@ -583,10 +592,7 @@ New York | GPE"""
             async with semaphore:
                 return await self.extract_entities(content, source_id)
 
-        tasks = [
-            process_one(content, source_id)
-            for content, source_id in items
-        ]
+        tasks = [process_one(content, source_id) for content, source_id in items]
 
         return await asyncio.gather(*tasks)
 
@@ -597,7 +603,7 @@ New York | GPE"""
     async def _store_entities(
         self,
         source_id: str,
-        entities: List[ExtractedEntity],
+        entities: list[ExtractedEntity],
     ) -> None:
         """Store entities in Brain Layer."""
         try:
@@ -617,16 +623,18 @@ New York | GPE"""
                             f"{source_id}:{entity.text}:{entity.label.value}".encode()
                         ).hexdigest()
 
-                        records.append({
-                            "id": entity_id,
-                            "document_id": source_id,
-                            "text": entity.text,
-                            "label": entity.label.value,
-                            "start_char": entity.start_char,
-                            "end_char": entity.end_char,
-                            "confidence": entity.confidence,
-                            "created_at": datetime.utcnow().isoformat(),
-                        })
+                        records.append(
+                            {
+                                "id": entity_id,
+                                "document_id": source_id,
+                                "text": entity.text,
+                                "label": entity.label.value,
+                                "start_char": entity.start_char,
+                                "end_char": entity.end_char,
+                                "confidence": entity.confidence,
+                                "created_at": datetime.utcnow().isoformat(),
+                            }
+                        )
 
                     await client.table("document_entities").upsert(records).execute()
 
@@ -734,7 +742,7 @@ New York | GPE"""
             },
         )
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get entity extraction statistics."""
         return self._stats.copy()
 
@@ -743,10 +751,11 @@ New York | GPE"""
 # Factory Function
 # =============================================================================
 
+
 def create_entity_agent(
-    config: Optional[AgentConfig] = None,
-    entity_config: Optional[EntityConfig] = None,
-    context: Optional[AgentContext] = None,
+    config: AgentConfig | None = None,
+    entity_config: EntityConfig | None = None,
+    context: AgentContext | None = None,
 ) -> EntityExtractionAgent:
     """
     Factory function to create an EntityExtractionAgent.
