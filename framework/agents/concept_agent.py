@@ -31,14 +31,14 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from framework.agents.base_agent import (
-    BaseAgent,
-    AgentTask,
-    AgentResponse,
     AgentConfig,
     AgentContext,
+    AgentResponse,
+    AgentTask,
+    BaseAgent,
     TaskStatus,
 )
 from framework.agents.brain_logger import BrainLogger, get_brain_logger
@@ -55,8 +55,10 @@ logger = logging.getLogger(__name__)
 # Enums and Configuration
 # =============================================================================
 
+
 class ConceptExtractionModel(Enum):
     """Supported concept extraction models."""
+
     KEYBERT = "keybert"
     YAKE = "yake"
     RAKE = "rake"
@@ -66,16 +68,18 @@ class ConceptExtractionModel(Enum):
 
 class RelationType(Enum):
     """Types of relationships between concepts."""
-    CO_OCCURRENCE = "co_occurrence"       # Appear together in same document
-    SEMANTIC_SIMILARITY = "semantic"       # Semantically related
-    HIERARCHICAL = "hierarchical"          # Parent-child relationship
-    CAUSAL = "causal"                      # Cause-effect relationship
-    PART_OF = "part_of"                    # Component relationship
-    RELATED_TO = "related_to"              # General relationship
+
+    CO_OCCURRENCE = "co_occurrence"  # Appear together in same document
+    SEMANTIC_SIMILARITY = "semantic"  # Semantically related
+    HIERARCHICAL = "hierarchical"  # Parent-child relationship
+    CAUSAL = "causal"  # Cause-effect relationship
+    PART_OF = "part_of"  # Component relationship
+    RELATED_TO = "related_to"  # General relationship
 
 
 class NodeType(Enum):
     """Types of nodes in the concept graph."""
+
     CONCEPT = "concept"
     DOCUMENT = "document"
     ENTITY = "entity"
@@ -88,7 +92,7 @@ class ConceptConfig:
 
     # Extraction settings
     model: ConceptExtractionModel = ConceptExtractionModel.KEYBERT
-    fallback_models: List[ConceptExtractionModel] = field(
+    fallback_models: list[ConceptExtractionModel] = field(
         default_factory=lambda: [
             ConceptExtractionModel.TFIDF,
             ConceptExtractionModel.LLM,
@@ -96,7 +100,7 @@ class ConceptConfig:
     )
 
     # KeyBERT settings
-    keyphrase_ngram_range: Tuple[int, int] = (1, 3)
+    keyphrase_ngram_range: tuple[int, int] = (1, 3)
     use_mmr: bool = True
     diversity: float = 0.7
     top_n_concepts: int = 15
@@ -130,11 +134,11 @@ class ConceptNode:
     node_type: NodeType = NodeType.CONCEPT
     relevance: float = 1.0
     frequency: int = 1
-    documents: List[str] = field(default_factory=list)  # Document IDs containing this concept
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    documents: list[str] = field(default_factory=list)  # Document IDs containing this concept
+    metadata: dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.utcnow)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "id": self.id,
@@ -158,10 +162,10 @@ class ConceptRelation:
     target_name: str
     relation_type: RelationType = RelationType.CO_OCCURRENCE
     weight: float = 1.0
-    documents: List[str] = field(default_factory=list)  # Documents where relation appears
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    documents: list[str] = field(default_factory=list)  # Documents where relation appears
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "source_id": self.source_id,
@@ -180,15 +184,15 @@ class ConceptGraphResult:
     """Result from concept extraction and graph building."""
 
     source_id: str
-    nodes: List[ConceptNode]
-    relations: List[ConceptRelation]
+    nodes: list[ConceptNode]
+    relations: list[ConceptRelation]
     total_concepts: int
     total_relations: int
     processing_time_ms: float = 0.0
     model_used: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "source_id": self.source_id,
@@ -205,6 +209,7 @@ class ConceptGraphResult:
 # =============================================================================
 # In-Memory Graph Store
 # =============================================================================
+
 
 class ConceptGraph:
     """
@@ -228,6 +233,7 @@ class ConceptGraph:
 
             try:
                 import networkx as nx
+
                 self._graph = nx.DiGraph()
             except ImportError:
                 logger.warning("NetworkX not available, graph features disabled")
@@ -292,7 +298,7 @@ class ConceptGraph:
         concept_id: str,
         max_depth: int = 2,
         max_results: int = 10,
-    ) -> List[Tuple[str, str, float]]:
+    ) -> list[tuple[str, str, float]]:
         """Get concepts related to a given concept."""
         await self._ensure_graph()
         if self._graph is None or not self._graph.has_node(concept_id):
@@ -327,7 +333,7 @@ class ConceptGraph:
         results.sort(key=lambda x: x[2], reverse=True)
         return results[:max_results]
 
-    async def get_stats(self) -> Dict[str, Any]:
+    async def get_stats(self) -> dict[str, Any]:
         """Get graph statistics."""
         await self._ensure_graph()
         if self._graph is None:
@@ -354,6 +360,7 @@ def get_concept_graph() -> ConceptGraph:
 # ConceptAgent Implementation
 # =============================================================================
 
+
 class ConceptAgent(BaseAgent):
     """
     Knowledge Distillation Agent for concept graph building.
@@ -374,11 +381,11 @@ class ConceptAgent(BaseAgent):
 
     def __init__(
         self,
-        config: Optional[AgentConfig] = None,
-        concept_config: Optional[ConceptConfig] = None,
-        context: Optional[AgentContext] = None,
-        brain_logger: Optional[BrainLogger] = None,
-        graph: Optional[ConceptGraph] = None,
+        config: AgentConfig | None = None,
+        concept_config: ConceptConfig | None = None,
+        context: AgentContext | None = None,
+        brain_logger: BrainLogger | None = None,
+        graph: ConceptGraph | None = None,
     ):
         super().__init__(config=config, context=context)
 
@@ -442,8 +449,7 @@ class ConceptAgent(BaseAgent):
 
                 loop = asyncio.get_event_loop()
                 self._embedding_model = await loop.run_in_executor(
-                    None,
-                    lambda: SentenceTransformer("all-MiniLM-L6-v2")
+                    None, lambda: SentenceTransformer("all-MiniLM-L6-v2")
                 )
 
                 return self._embedding_model
@@ -462,8 +468,8 @@ class ConceptAgent(BaseAgent):
     async def extract_concepts(
         self,
         content: str,
-        source_id: Optional[str] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        source_id: str | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> ConceptGraphResult:
         """
         Extract concepts and build relationships from content.
@@ -497,7 +503,7 @@ class ConceptAgent(BaseAgent):
 
         # Truncate if too long
         if len(content) > self.concept_config.max_content_length:
-            content = content[:self.concept_config.max_content_length]
+            content = content[: self.concept_config.max_content_length]
 
         # Log start
         run_id = str(uuid.uuid4())
@@ -578,7 +584,7 @@ class ConceptAgent(BaseAgent):
         self,
         content: str,
         source_id: str,
-    ) -> Tuple[List[Dict[str, Any]], str]:
+    ) -> tuple[list[dict[str, Any]], str]:
         """Try extraction models in priority order."""
         models_to_try = [self.concept_config.model] + self.concept_config.fallback_models
 
@@ -608,7 +614,7 @@ class ConceptAgent(BaseAgent):
     async def _extract_with_keybert(
         self,
         content: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Extract concepts using KeyBERT."""
         keybert = await self._get_keybert()
         if keybert is None:
@@ -625,7 +631,7 @@ class ConceptAgent(BaseAgent):
                     use_mmr=self.concept_config.use_mmr,
                     diversity=self.concept_config.diversity,
                     top_n=self.concept_config.top_n_concepts,
-                )
+                ),
             )
 
             concepts = [
@@ -643,7 +649,7 @@ class ConceptAgent(BaseAgent):
     async def _extract_with_llm(
         self,
         content: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Extract concepts using LLM."""
         try:
             prompt = f"""Extract the {self.concept_config.top_n_concepts} most important concepts, terms, or key phrases from the following text.
@@ -684,7 +690,7 @@ data preprocessing | 0.7"""
                 if score >= self.concept_config.min_relevance:
                     concepts.append({"concept": concept, "relevance": score})
 
-            return concepts[:self.concept_config.top_n_concepts]
+            return concepts[: self.concept_config.top_n_concepts]
 
         except Exception as e:
             logger.warning(f"LLM extraction failed: {e}")
@@ -693,7 +699,7 @@ data preprocessing | 0.7"""
     async def _extract_with_tfidf(
         self,
         content: str,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Extract concepts using TF-IDF."""
         try:
             from sklearn.feature_extraction.text import TfidfVectorizer
@@ -706,8 +712,7 @@ data preprocessing | 0.7"""
 
             loop = asyncio.get_event_loop()
             tfidf_matrix = await loop.run_in_executor(
-                None,
-                lambda: vectorizer.fit_transform([content])
+                None, lambda: vectorizer.fit_transform([content])
             )
 
             feature_names = vectorizer.get_feature_names_out()
@@ -719,7 +724,7 @@ data preprocessing | 0.7"""
 
             concepts = [
                 {"concept": concept, "relevance": float(score)}
-                for concept, score in concept_scores[:self.concept_config.top_n_concepts]
+                for concept, score in concept_scores[: self.concept_config.top_n_concepts]
                 if score >= self.concept_config.min_relevance
             ]
 
@@ -735,28 +740,30 @@ data preprocessing | 0.7"""
 
     async def _build_relations(
         self,
-        nodes: List[ConceptNode],
+        nodes: list[ConceptNode],
         source_id: str,
-    ) -> List[ConceptRelation]:
+    ) -> list[ConceptRelation]:
         """Build relationships between concepts."""
         relations = []
 
         # Co-occurrence relations (all concepts in same doc are related)
         for i, node1 in enumerate(nodes):
-            for node2 in nodes[i + 1:]:
+            for node2 in nodes[i + 1 :]:
                 # Weight based on combined relevance
                 weight = (node1.relevance + node2.relevance) / 2
 
                 if weight >= self.concept_config.min_edge_weight:
-                    relations.append(ConceptRelation(
-                        source_id=node1.id,
-                        target_id=node2.id,
-                        source_name=node1.name,
-                        target_name=node2.name,
-                        relation_type=RelationType.CO_OCCURRENCE,
-                        weight=weight,
-                        documents=[source_id],
-                    ))
+                    relations.append(
+                        ConceptRelation(
+                            source_id=node1.id,
+                            target_id=node2.id,
+                            source_name=node1.name,
+                            target_name=node2.name,
+                            relation_type=RelationType.CO_OCCURRENCE,
+                            weight=weight,
+                            documents=[source_id],
+                        )
+                    )
 
                 if len(relations) >= self.concept_config.max_edges_per_node * len(nodes):
                     break
@@ -770,9 +777,9 @@ data preprocessing | 0.7"""
 
     async def _build_semantic_relations(
         self,
-        nodes: List[ConceptNode],
+        nodes: list[ConceptNode],
         source_id: str,
-    ) -> List[ConceptRelation]:
+    ) -> list[ConceptRelation]:
         """Build semantic similarity-based relations."""
         embedding_model = await self._get_embedding_model()
         if embedding_model is None:
@@ -786,8 +793,7 @@ data preprocessing | 0.7"""
             # Get embeddings for all concept names
             concept_names = [node.name for node in nodes]
             embeddings = await loop.run_in_executor(
-                None,
-                lambda: embedding_model.encode(concept_names)
+                None, lambda: embedding_model.encode(concept_names)
             )
 
             relations = []
@@ -799,20 +805,23 @@ data preprocessing | 0.7"""
                         continue
 
                     # Cosine similarity
-                    sim = float(np.dot(embeddings[i], embeddings[j]) / (
-                        np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[j])
-                    ))
+                    sim = float(
+                        np.dot(embeddings[i], embeddings[j])
+                        / (np.linalg.norm(embeddings[i]) * np.linalg.norm(embeddings[j]))
+                    )
 
                     if sim >= self.concept_config.semantic_threshold:
-                        relations.append(ConceptRelation(
-                            source_id=node1.id,
-                            target_id=node2.id,
-                            source_name=node1.name,
-                            target_name=node2.name,
-                            relation_type=RelationType.SEMANTIC_SIMILARITY,
-                            weight=sim,
-                            documents=[source_id],
-                        ))
+                        relations.append(
+                            ConceptRelation(
+                                source_id=node1.id,
+                                target_id=node2.id,
+                                source_name=node1.name,
+                                target_name=node2.name,
+                                relation_type=RelationType.SEMANTIC_SIMILARITY,
+                                weight=sim,
+                                documents=[source_id],
+                            )
+                        )
 
             return relations
 
@@ -829,7 +838,7 @@ data preprocessing | 0.7"""
         concept: str,
         max_depth: int = 2,
         max_results: int = 10,
-    ) -> List[Tuple[str, str, float]]:
+    ) -> list[tuple[str, str, float]]:
         """
         Get concepts related to a given concept name.
 
@@ -844,7 +853,7 @@ data preprocessing | 0.7"""
         concept_id = hashlib.md5(concept.lower().encode()).hexdigest()[:16]
         return await self.graph.get_related_concepts(concept_id, max_depth, max_results)
 
-    async def get_graph_stats(self) -> Dict[str, Any]:
+    async def get_graph_stats(self) -> dict[str, Any]:
         """Get global concept graph statistics."""
         return await self.graph.get_stats()
 
@@ -855,8 +864,8 @@ data preprocessing | 0.7"""
     async def _store_concepts(
         self,
         source_id: str,
-        nodes: List[ConceptNode],
-        relations: List[ConceptRelation],
+        nodes: list[ConceptNode],
+        relations: list[ConceptRelation],
     ) -> None:
         """Store concepts and relations in Brain Layer."""
         try:
@@ -873,17 +882,17 @@ data preprocessing | 0.7"""
                     if nodes:
                         concept_records = []
                         for node in nodes:
-                            record_id = hashlib.md5(
-                                f"{source_id}:{node.name}".encode()
-                            ).hexdigest()
+                            record_id = hashlib.md5(f"{source_id}:{node.name}".encode()).hexdigest()
 
-                            concept_records.append({
-                                "id": record_id,
-                                "document_id": source_id,
-                                "concept": node.name,
-                                "relevance": node.relevance,
-                                "created_at": datetime.utcnow().isoformat(),
-                            })
+                            concept_records.append(
+                                {
+                                    "id": record_id,
+                                    "document_id": source_id,
+                                    "concept": node.name,
+                                    "relevance": node.relevance,
+                                    "created_at": datetime.utcnow().isoformat(),
+                                }
+                            )
 
                         await client.table("document_concepts").upsert(concept_records).execute()
 
@@ -891,13 +900,15 @@ data preprocessing | 0.7"""
                     if nodes:
                         node_records = []
                         for node in nodes:
-                            node_records.append({
-                                "id": node.id,
-                                "name": node.name,
-                                "node_type": node.node_type.value,
-                                "frequency": node.frequency,
-                                "created_at": datetime.utcnow().isoformat(),
-                            })
+                            node_records.append(
+                                {
+                                    "id": node.id,
+                                    "name": node.name,
+                                    "node_type": node.node_type.value,
+                                    "frequency": node.frequency,
+                                    "created_at": datetime.utcnow().isoformat(),
+                                }
+                            )
 
                         await client.table("concept_nodes").upsert(node_records).execute()
 
@@ -909,14 +920,16 @@ data preprocessing | 0.7"""
                                 f"{rel.source_id}:{rel.target_id}:{rel.relation_type.value}".encode()
                             ).hexdigest()
 
-                            relation_records.append({
-                                "id": rel_id,
-                                "source_id": rel.source_id,
-                                "target_id": rel.target_id,
-                                "relation_type": rel.relation_type.value,
-                                "weight": rel.weight,
-                                "created_at": datetime.utcnow().isoformat(),
-                            })
+                            relation_records.append(
+                                {
+                                    "id": rel_id,
+                                    "source_id": rel.source_id,
+                                    "target_id": rel.target_id,
+                                    "relation_type": rel.relation_type.value,
+                                    "weight": rel.weight,
+                                    "created_at": datetime.utcnow().isoformat(),
+                                }
+                            )
 
                         await client.table("concept_relations").upsert(relation_records).execute()
 
@@ -1016,7 +1029,7 @@ data preprocessing | 0.7"""
             },
         )
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get concept extraction statistics."""
         return self._stats.copy()
 
@@ -1025,10 +1038,11 @@ data preprocessing | 0.7"""
 # Factory Function
 # =============================================================================
 
+
 def create_concept_agent(
-    config: Optional[AgentConfig] = None,
-    concept_config: Optional[ConceptConfig] = None,
-    context: Optional[AgentContext] = None,
+    config: AgentConfig | None = None,
+    concept_config: ConceptConfig | None = None,
+    context: AgentContext | None = None,
 ) -> ConceptAgent:
     """
     Factory function to create a ConceptAgent.

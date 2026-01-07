@@ -35,16 +35,16 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Callable, Dict, List, Optional, Tuple, Union
+from typing import Any
 
 from framework.agents.base_agent import (
-    BaseAgent,
-    AgentTask,
-    AgentResponse,
     AgentConfig,
     AgentContext,
-    TaskStatus,
+    AgentResponse,
+    AgentTask,
+    BaseAgent,
     LLMProvider,
+    TaskStatus,
 )
 from framework.agents.brain_logger import BrainLogger, get_brain_logger
 from framework.agents.schemas.agent_run import (
@@ -60,17 +60,20 @@ logger = logging.getLogger(__name__)
 # Enums and Configuration
 # =============================================================================
 
+
 class RetrievalMode(Enum):
     """Mode of retrieval operation."""
-    SEMANTIC = "semantic"           # Pure vector similarity search
-    KEYWORD = "keyword"             # TF-IDF / BM25 keyword matching
-    HYBRID = "hybrid"               # Combination of semantic + keyword
-    EXPANDED = "expanded"           # LLM-expanded query
-    MULTI_QUERY = "multi_query"     # Generate multiple queries for recall
+
+    SEMANTIC = "semantic"  # Pure vector similarity search
+    KEYWORD = "keyword"  # TF-IDF / BM25 keyword matching
+    HYBRID = "hybrid"  # Combination of semantic + keyword
+    EXPANDED = "expanded"  # LLM-expanded query
+    MULTI_QUERY = "multi_query"  # Generate multiple queries for recall
 
 
 class RetrievalSource(Enum):
     """Source backends for retrieval."""
+
     PGVECTOR = "pgvector"
     CHROMADB = "chromadb"
     TFIDF = "tfidf"
@@ -80,11 +83,12 @@ class RetrievalSource(Enum):
 
 class RerankerType(Enum):
     """Type of reranking to apply."""
+
     NONE = "none"
-    CROSS_ENCODER = "cross_encoder"     # Use cross-encoder model
-    LLM = "llm"                         # Use LLM for reranking
-    MMR = "mmr"                         # Maximal Marginal Relevance
-    RECIPROCAL_RANK = "reciprocal_rank" # Reciprocal rank fusion
+    CROSS_ENCODER = "cross_encoder"  # Use cross-encoder model
+    LLM = "llm"  # Use LLM for reranking
+    MMR = "mmr"  # Maximal Marginal Relevance
+    RECIPROCAL_RANK = "reciprocal_rank"  # Reciprocal rank fusion
 
 
 @dataclass
@@ -98,7 +102,7 @@ class RetrieverConfig:
     default_mode: RetrievalMode = RetrievalMode.HYBRID
 
     # Source priority (fallback chain order)
-    source_priority: List[RetrievalSource] = field(
+    source_priority: list[RetrievalSource] = field(
         default_factory=lambda: [
             RetrievalSource.PGVECTOR,
             RetrievalSource.CHROMADB,
@@ -138,27 +142,27 @@ class RetrievalFilter:
     """Filters for retrieval queries."""
 
     # Metadata filters
-    metadata_match: Dict[str, Any] = field(default_factory=dict)
-    metadata_contains: Dict[str, str] = field(default_factory=dict)
+    metadata_match: dict[str, Any] = field(default_factory=dict)
+    metadata_contains: dict[str, str] = field(default_factory=dict)
 
     # Source filters
-    sources: Optional[List[str]] = None
-    exclude_sources: Optional[List[str]] = None
-    document_types: Optional[List[str]] = None
+    sources: list[str] | None = None
+    exclude_sources: list[str] | None = None
+    document_types: list[str] | None = None
 
     # Content filters
-    content_contains: Optional[str] = None
-    min_content_length: Optional[int] = None
-    max_content_length: Optional[int] = None
+    content_contains: str | None = None
+    min_content_length: int | None = None
+    max_content_length: int | None = None
 
     # Time filters
-    created_after: Optional[datetime] = None
-    created_before: Optional[datetime] = None
+    created_after: datetime | None = None
+    created_before: datetime | None = None
 
     # Tenant isolation
-    tenant_id: Optional[str] = None
+    tenant_id: str | None = None
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         result = {}
         if self.metadata_match:
@@ -180,13 +184,13 @@ class RetrievalResult:
     content: str
     score: float
     source: RetrievalSource
-    metadata: Dict[str, Any] = field(default_factory=dict)
-    chunk_index: Optional[int] = None
-    document_id: Optional[str] = None
-    document_title: Optional[str] = None
-    highlight: Optional[str] = None  # Highlighted snippet
+    metadata: dict[str, Any] = field(default_factory=dict)
+    chunk_index: int | None = None
+    document_id: str | None = None
+    document_title: str | None = None
+    highlight: str | None = None  # Highlighted snippet
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "id": self.id,
@@ -206,16 +210,16 @@ class RetrievalResponse:
     """Response from a retrieval operation."""
 
     query: str
-    results: List[RetrievalResult]
+    results: list[RetrievalResult]
     total_found: int
-    sources_searched: List[RetrievalSource]
+    sources_searched: list[RetrievalSource]
     mode_used: RetrievalMode
-    expanded_queries: Optional[List[str]] = None
+    expanded_queries: list[str] | None = None
     search_time_ms: float = 0.0
     cache_hit: bool = False
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "query": self.query,
@@ -234,6 +238,7 @@ class RetrievalResponse:
 # Query Cache
 # =============================================================================
 
+
 class QueryCache:
     """LRU cache for retrieval results with TTL."""
 
@@ -244,14 +249,14 @@ class QueryCache:
     ):
         self.max_size = max_size
         self.ttl_seconds = ttl_seconds
-        self._cache: Dict[str, Tuple[RetrievalResponse, float]] = {}
-        self._access_order: List[str] = []
+        self._cache: dict[str, tuple[RetrievalResponse, float]] = {}
+        self._access_order: list[str] = []
         self._lock = asyncio.Lock()
 
     def _compute_key(
         self,
         query: str,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         top_k: int,
         mode: RetrievalMode,
     ) -> str:
@@ -263,10 +268,10 @@ class QueryCache:
     async def get(
         self,
         query: str,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         top_k: int,
         mode: RetrievalMode,
-    ) -> Optional[RetrievalResponse]:
+    ) -> RetrievalResponse | None:
         """Get cached result if available and not expired."""
         key = self._compute_key(query, filters, top_k, mode)
 
@@ -293,7 +298,7 @@ class QueryCache:
     async def set(
         self,
         query: str,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         top_k: int,
         mode: RetrievalMode,
         response: RetrievalResponse,
@@ -316,7 +321,7 @@ class QueryCache:
             self._cache.clear()
             self._access_order.clear()
 
-    def stats(self) -> Dict[str, Any]:
+    def stats(self) -> dict[str, Any]:
         """Get cache statistics."""
         return {
             "size": len(self._cache),
@@ -328,6 +333,7 @@ class QueryCache:
 # =============================================================================
 # RetrieverAgent Implementation
 # =============================================================================
+
 
 class RetrieverAgent(BaseAgent):
     """
@@ -351,10 +357,10 @@ class RetrieverAgent(BaseAgent):
 
     def __init__(
         self,
-        config: Optional[AgentConfig] = None,
-        retriever_config: Optional[RetrieverConfig] = None,
-        context: Optional[AgentContext] = None,
-        brain_logger: Optional[BrainLogger] = None,
+        config: AgentConfig | None = None,
+        retriever_config: RetrieverConfig | None = None,
+        context: AgentContext | None = None,
+        brain_logger: BrainLogger | None = None,
     ):
         # Initialize base agent
         super().__init__(config=config, context=context)
@@ -363,16 +369,20 @@ class RetrieverAgent(BaseAgent):
         self.brain_logger = brain_logger or get_brain_logger()
 
         # Initialize cache
-        self._cache = QueryCache(
-            max_size=self.retriever_config.max_cache_size,
-            ttl_seconds=self.retriever_config.cache_ttl_seconds,
-        ) if self.retriever_config.enable_cache else None
+        self._cache = (
+            QueryCache(
+                max_size=self.retriever_config.max_cache_size,
+                ttl_seconds=self.retriever_config.cache_ttl_seconds,
+            )
+            if self.retriever_config.enable_cache
+            else None
+        )
 
         # Initialize embedding service (lazy loaded)
         self._embedding_service = None
 
         # Source adapters (lazy loaded)
-        self._source_adapters: Dict[RetrievalSource, Any] = {}
+        self._source_adapters: dict[RetrievalSource, Any] = {}
 
         # Statistics
         self._stats = {
@@ -433,6 +443,7 @@ class RetrieverAgent(BaseAgent):
         try:
             # Try to import from Brain Layer (dynamic import for numbered module)
             import importlib
+
             vector_store_module = importlib.import_module(
                 "brain_layer.05_retrieval_systems.vector_store"
             )
@@ -440,8 +451,9 @@ class RetrieverAgent(BaseAgent):
             return VectorStore()
         except (ImportError, AttributeError):
             try:
-                from framework.retrieval.vector_search import PgVectorIndex
                 import os
+
+                from framework.retrieval.vector_search import PgVectorIndex
 
                 conn_string = os.getenv("SUPABASE_DB_URL") or os.getenv("DATABASE_URL")
                 if conn_string:
@@ -469,6 +481,7 @@ class RetrieverAgent(BaseAgent):
         """Create TF-IDF adapter using Brain Layer components."""
         try:
             import importlib
+
             tfidf_module = importlib.import_module(
                 "brain_layer.05_retrieval_systems.tfidf_librarian"
             )
@@ -497,9 +510,9 @@ class RetrieverAgent(BaseAgent):
     async def retrieve(
         self,
         query: str,
-        filters: Optional[RetrievalFilter] = None,
-        top_k: Optional[int] = None,
-        mode: Optional[RetrievalMode] = None,
+        filters: RetrievalFilter | None = None,
+        top_k: int | None = None,
+        mode: RetrievalMode | None = None,
         rerank: bool = True,
     ) -> RetrievalResponse:
         """
@@ -558,10 +571,7 @@ class RetrieverAgent(BaseAgent):
                 results = await self._rerank_results(query, results)
 
             # Apply minimum similarity filter
-            results = [
-                r for r in results
-                if r.score >= self.retriever_config.min_similarity
-            ]
+            results = [r for r in results if r.score >= self.retriever_config.min_similarity]
 
             # Limit to top_k
             results = results[:top_k]
@@ -611,9 +621,9 @@ class RetrieverAgent(BaseAgent):
     async def _retrieve_semantic(
         self,
         query: str,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         top_k: int,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Perform semantic search using embeddings."""
         embedding_service = await self._get_embedding_service()
         if embedding_service is None:
@@ -655,9 +665,9 @@ class RetrieverAgent(BaseAgent):
     async def _retrieve_keyword(
         self,
         query: str,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         top_k: int,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Perform keyword-based search using TF-IDF or heuristic."""
         for source in [RetrievalSource.TFIDF, RetrievalSource.HEURISTIC]:
             adapter = await self._get_source_adapter(source)
@@ -686,20 +696,17 @@ class RetrieverAgent(BaseAgent):
     async def _retrieve_hybrid(
         self,
         query: str,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         top_k: int,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Perform hybrid search combining semantic and keyword."""
         # Run both in parallel
-        semantic_task = asyncio.create_task(
-            self._retrieve_semantic(query, filters, top_k)
-        )
-        keyword_task = asyncio.create_task(
-            self._retrieve_keyword(query, filters, top_k)
-        )
+        semantic_task = asyncio.create_task(self._retrieve_semantic(query, filters, top_k))
+        keyword_task = asyncio.create_task(self._retrieve_keyword(query, filters, top_k))
 
         semantic_results, keyword_results = await asyncio.gather(
-            semantic_task, keyword_task,
+            semantic_task,
+            keyword_task,
             return_exceptions=True,
         )
 
@@ -718,15 +725,15 @@ class RetrieverAgent(BaseAgent):
     async def _retrieve_with_expansion(
         self,
         query: str,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         top_k: int,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Retrieve with LLM-expanded query."""
         # Expand query using LLM
         expanded_queries = await self._expand_query(query)
 
         # Search with all queries
-        all_results: List[List[RetrievalResult]] = []
+        all_results: list[list[RetrievalResult]] = []
 
         for expanded_query in [query] + expanded_queries:
             results = await self._retrieve_semantic(expanded_query, filters, top_k)
@@ -738,18 +745,15 @@ class RetrieverAgent(BaseAgent):
     async def _retrieve_multi_query(
         self,
         query: str,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         top_k: int,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Generate multiple query variations and merge results."""
         # Generate query variations
         variations = await self._generate_query_variations(query)
 
         # Search all variations concurrently
-        tasks = [
-            self._retrieve_semantic(q, filters, top_k)
-            for q in [query] + variations
-        ]
+        tasks = [self._retrieve_semantic(q, filters, top_k) for q in [query] + variations]
 
         all_results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -762,7 +766,7 @@ class RetrieverAgent(BaseAgent):
     # Query Expansion
     # =========================================================================
 
-    async def _expand_query(self, query: str) -> List[str]:
+    async def _expand_query(self, query: str) -> list[str]:
         """Expand query using LLM to improve recall."""
         if not self.retriever_config.enable_query_expansion:
             return []
@@ -784,14 +788,14 @@ Return only the alternative queries, one per line. Do not include the original q
                     for line in response.output.strip().split("\n")
                     if line.strip() and not line.startswith("-")
                 ]
-                return expanded[:self.retriever_config.max_expanded_queries]
+                return expanded[: self.retriever_config.max_expanded_queries]
 
         except Exception as e:
             logger.warning(f"Query expansion failed: {e}")
 
         return []
 
-    async def _generate_query_variations(self, query: str) -> List[str]:
+    async def _generate_query_variations(self, query: str) -> list[str]:
         """Generate query variations for multi-query retrieval."""
         try:
             prompt = f"""Generate 3 different ways to ask the following question. Each should capture the same intent but use different words or perspectives.
@@ -804,9 +808,7 @@ Return only the variations, one per line."""
 
             if response and response.output:
                 variations = [
-                    line.strip()
-                    for line in response.output.strip().split("\n")
-                    if line.strip()
+                    line.strip() for line in response.output.strip().split("\n") if line.strip()
                 ]
                 return variations[:3]
 
@@ -823,10 +825,10 @@ Return only the variations, one per line."""
         self,
         adapter: Any,
         source: RetrievalSource,
-        query_embedding: List[float],
-        filters: Optional[RetrievalFilter],
+        query_embedding: list[float],
+        filters: RetrievalFilter | None,
         top_k: int,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Search a specific source with vector embedding."""
         try:
             # Convert filters to source-specific format
@@ -864,9 +866,9 @@ Return only the variations, one per line."""
         adapter: Any,
         source: RetrievalSource,
         query: str,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         top_k: int,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Search a keyword-based source."""
         try:
             if hasattr(adapter, "search_text"):
@@ -884,9 +886,9 @@ Return only the variations, one per line."""
 
     def _convert_filters(
         self,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         source: RetrievalSource,
-    ) -> Dict[str, Any]:
+    ) -> dict[str, Any]:
         """Convert RetrievalFilter to source-specific format."""
         if filters is None:
             return {}
@@ -908,7 +910,7 @@ Return only the variations, one per line."""
         self,
         raw_results: Any,
         source: RetrievalSource,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Convert source-specific results to RetrievalResult."""
         results = []
 
@@ -920,33 +922,39 @@ Return only the variations, one per line."""
             try:
                 if hasattr(item, "id"):
                     # VectorSearchResult-like object
-                    results.append(RetrievalResult(
-                        id=str(item.id),
-                        content=getattr(item, "content", ""),
-                        score=float(getattr(item, "score", 0.0)),
-                        source=source,
-                        metadata=getattr(item, "metadata", {}),
-                        chunk_index=getattr(item, "chunk_index", None),
-                        document_id=getattr(item, "document_id", None),
-                    ))
+                    results.append(
+                        RetrievalResult(
+                            id=str(item.id),
+                            content=getattr(item, "content", ""),
+                            score=float(getattr(item, "score", 0.0)),
+                            source=source,
+                            metadata=getattr(item, "metadata", {}),
+                            chunk_index=getattr(item, "chunk_index", None),
+                            document_id=getattr(item, "document_id", None),
+                        )
+                    )
                 elif isinstance(item, dict):
-                    results.append(RetrievalResult(
-                        id=str(item.get("id", uuid.uuid4())),
-                        content=item.get("content", item.get("text", "")),
-                        score=float(item.get("score", item.get("similarity", 0.0))),
-                        source=source,
-                        metadata=item.get("metadata", {}),
-                        chunk_index=item.get("chunk_index"),
-                        document_id=item.get("document_id"),
-                    ))
+                    results.append(
+                        RetrievalResult(
+                            id=str(item.get("id", uuid.uuid4())),
+                            content=item.get("content", item.get("text", "")),
+                            score=float(item.get("score", item.get("similarity", 0.0))),
+                            source=source,
+                            metadata=item.get("metadata", {}),
+                            chunk_index=item.get("chunk_index"),
+                            document_id=item.get("document_id"),
+                        )
+                    )
                 elif isinstance(item, tuple) and len(item) >= 2:
                     # (content, score) tuple
-                    results.append(RetrievalResult(
-                        id=str(uuid.uuid4()),
-                        content=str(item[0]),
-                        score=float(item[1]),
-                        source=source,
-                    ))
+                    results.append(
+                        RetrievalResult(
+                            id=str(uuid.uuid4()),
+                            content=str(item[0]),
+                            score=float(item[1]),
+                            source=source,
+                        )
+                    )
 
             except Exception as e:
                 logger.warning(f"Failed to convert result: {e}")
@@ -961,8 +969,8 @@ Return only the variations, one per line."""
     async def _rerank_results(
         self,
         query: str,
-        results: List[RetrievalResult],
-    ) -> List[RetrievalResult]:
+        results: list[RetrievalResult],
+    ) -> list[RetrievalResult]:
         """Rerank results based on configured strategy."""
         if not results:
             return results
@@ -986,8 +994,8 @@ Return only the variations, one per line."""
     async def _mmr_rerank(
         self,
         query: str,
-        results: List[RetrievalResult],
-    ) -> List[RetrievalResult]:
+        results: list[RetrievalResult],
+    ) -> list[RetrievalResult]:
         """Maximal Marginal Relevance reranking for diversity."""
         if len(results) <= 1:
             return results
@@ -1042,18 +1050,20 @@ Return only the variations, one per line."""
     async def _llm_rerank(
         self,
         query: str,
-        results: List[RetrievalResult],
-    ) -> List[RetrievalResult]:
+        results: list[RetrievalResult],
+    ) -> list[RetrievalResult]:
         """Use LLM to rerank results by relevance."""
         if len(results) <= 1:
             return results
 
         try:
             # Build prompt with results
-            results_text = "\n\n".join([
-                f"Document {i+1}:\n{r.content[:500]}..."
-                for i, r in enumerate(results[:10])  # Limit to 10 for context
-            ])
+            results_text = "\n\n".join(
+                [
+                    f"Document {i+1}:\n{r.content[:500]}..."
+                    for i, r in enumerate(results[:10])  # Limit to 10 for context
+                ]
+            )
 
             prompt = f"""Rank the following documents by relevance to the query.
 Query: {query}
@@ -1093,8 +1103,8 @@ Example: 3, 1, 5, 2, 4"""
     async def _cross_encoder_rerank(
         self,
         query: str,
-        results: List[RetrievalResult],
-    ) -> List[RetrievalResult]:
+        results: list[RetrievalResult],
+    ) -> list[RetrievalResult]:
         """Use cross-encoder model for reranking."""
         try:
             from sentence_transformers import CrossEncoder
@@ -1120,13 +1130,13 @@ Example: 3, 1, 5, 2, 4"""
 
     def _reciprocal_rank_fusion(
         self,
-        result_lists: List[List[RetrievalResult]],
+        result_lists: list[list[RetrievalResult]],
         k: int = 60,
         top_k: int = 10,
-    ) -> List[RetrievalResult]:
+    ) -> list[RetrievalResult]:
         """Merge results using Reciprocal Rank Fusion."""
-        scores: Dict[str, float] = {}
-        result_map: Dict[str, RetrievalResult] = {}
+        scores: dict[str, float] = {}
+        result_map: dict[str, RetrievalResult] = {}
 
         for results in result_lists:
             for rank, result in enumerate(results):
@@ -1157,7 +1167,7 @@ Example: 3, 1, 5, 2, 4"""
         self,
         run_id: str,
         query: str,
-        filters: Optional[RetrievalFilter],
+        filters: RetrievalFilter | None,
         mode: RetrievalMode,
     ) -> None:
         """Log retrieval start to Brain Layer."""
@@ -1270,7 +1280,7 @@ Example: 3, 1, 5, 2, 4"""
             },
         )
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get retriever statistics."""
         return {
             **self._stats,
@@ -1287,17 +1297,18 @@ Example: 3, 1, 5, 2, 4"""
 # Heuristic Search Adapter
 # =============================================================================
 
+
 class HeuristicSearchAdapter:
     """Simple substring-based search as last resort fallback."""
 
     def __init__(self):
-        self._documents: Dict[str, Tuple[str, Dict[str, Any]]] = {}
+        self._documents: dict[str, tuple[str, dict[str, Any]]] = {}
 
     def add_document(
         self,
         id: str,
         content: str,
-        metadata: Optional[Dict[str, Any]] = None,
+        metadata: dict[str, Any] | None = None,
     ) -> None:
         """Add a document to the index."""
         self._documents[id] = (content, metadata or {})
@@ -1306,7 +1317,7 @@ class HeuristicSearchAdapter:
         self,
         query: str,
         top_k: int = 10,
-    ) -> List[Dict[str, Any]]:
+    ) -> list[dict[str, Any]]:
         """Search documents using substring matching."""
         query_lower = query.lower()
         query_words = set(query_lower.split())
@@ -1326,12 +1337,14 @@ class HeuristicSearchAdapter:
                 score += 0.5
 
             if score > 0:
-                results.append({
-                    "id": id,
-                    "content": content,
-                    "score": min(score, 1.0),
-                    "metadata": metadata,
-                })
+                results.append(
+                    {
+                        "id": id,
+                        "content": content,
+                        "score": min(score, 1.0),
+                        "metadata": metadata,
+                    }
+                )
 
         # Sort by score
         results.sort(key=lambda x: x["score"], reverse=True)
@@ -1343,10 +1356,11 @@ class HeuristicSearchAdapter:
 # Factory Function
 # =============================================================================
 
+
 def create_retriever_agent(
-    config: Optional[AgentConfig] = None,
-    retriever_config: Optional[RetrieverConfig] = None,
-    context: Optional[AgentContext] = None,
+    config: AgentConfig | None = None,
+    retriever_config: RetrieverConfig | None = None,
+    context: AgentContext | None = None,
 ) -> RetrieverAgent:
     """
     Factory function to create a RetrieverAgent.

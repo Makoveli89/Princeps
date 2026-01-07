@@ -1,8 +1,9 @@
 """Tests for retrieval functions and fallback behavior."""
+
 import os
-import pytest
-from unittest.mock import MagicMock, patch
 from uuid import uuid4
+
+import pytest
 
 from brain.core.db import similarity_search_chunks
 
@@ -11,12 +12,12 @@ from brain.core.db import similarity_search_chunks
 def is_postgres_available():
     """Check if PostgreSQL is available for testing."""
     import os
+
     return os.environ.get("DATABASE_URL", "").startswith("postgresql")
 
 
 requires_postgres = pytest.mark.skipif(
-    not is_postgres_available(),
-    reason="Requires PostgreSQL with pgvector extension"
+    not is_postgres_available(), reason="Requires PostgreSQL with pgvector extension"
 )
 
 
@@ -41,9 +42,7 @@ class TestSimilaritySearchChunks:
 
         # Search with non-existent tenant should return empty
         results = similarity_search_chunks(
-            session, query_embedding,
-            tenant_id=other_tenant_id,
-            limit=5
+            session, query_embedding, tenant_id=other_tenant_id, limit=5
         )
         assert results == []
 
@@ -55,9 +54,7 @@ class TestSimilaritySearchChunks:
 
         # Search with non-existent document should return empty
         results = similarity_search_chunks(
-            session, query_embedding,
-            document_id=other_doc_id,
-            limit=5
+            session, query_embedding, document_id=other_doc_id, limit=5
         )
         assert results == []
 
@@ -65,15 +62,21 @@ class TestSimilaritySearchChunks:
 def import_unified_retriever():
     """Try to import UnifiedRetriever from possible locations."""
     try:
-        from brain_layer.retrieval_systems.unified_retriever import UnifiedRetriever, RetrievalResult
+        from brain_layer.retrieval_systems.unified_retriever import (
+            RetrievalResult,
+            UnifiedRetriever,
+        )
+
         return UnifiedRetriever, RetrievalResult
     except ImportError:
         pass
     try:
         # Alternative path with numbered folder
         import sys
+
         sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
         from brain_layer import unified_retriever
+
         return unified_retriever.UnifiedRetriever, unified_retriever.RetrievalResult
     except (ImportError, AttributeError):
         pass
@@ -130,7 +133,7 @@ class TestRetrievalResultFormat:
             score=0.95,
             source="test",
             metadata={"key": "value"},
-            backend="test_backend"
+            backend="test_backend",
         )
 
         assert result.id == "test-id"
@@ -147,12 +150,7 @@ class TestRetrievalResultFormat:
             pytest.skip("RetrievalResult not available")
 
         result = RetrievalResult(
-            id="test",
-            content="content",
-            score=0.9,
-            source="src",
-            metadata={},
-            backend="backend"
+            id="test", content="content", score=0.9, source="src", metadata={}, backend="backend"
         )
 
         d = result.to_dict()
@@ -173,8 +171,7 @@ class TestGracefulDegradation:
         try:
             # Try to use pgvector without actual postgres - should fall back
             retriever = UnifiedRetriever(
-                backend="auto",
-                fallback_chain=["pgvector", "chroma", "tfidf", "heuristic"]
+                backend="auto", fallback_chain=["pgvector", "chroma", "tfidf", "heuristic"]
             )
             # Should have selected an available backend
             assert retriever.active_backend is not None
@@ -212,7 +209,7 @@ class TestEmptyResultsHandling:
 
         app = create_app()
         # The stub implementation returns empty results
-        if hasattr(app, 'test_client'):
+        if hasattr(app, "test_client"):
             client = app.test_client()
             response = client.post("/api/v1/query", json={"text": "nonexistent"})
             assert response.status_code != 500
@@ -231,12 +228,7 @@ class TestMinResultsFallback:
 
         retriever = UnifiedRetriever(backend="heuristic")
         # Request more results than available
-        results = retriever.search(
-            "test query",
-            top_k=100,
-            with_fallback=True,
-            min_results=1
-        )
+        results = retriever.search("test query", top_k=100, with_fallback=True, min_results=1)
         # Should not error even if can't find enough
         assert isinstance(results, list)
 

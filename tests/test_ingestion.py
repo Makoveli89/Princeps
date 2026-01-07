@@ -1,17 +1,16 @@
 """Tests for document and repository ingestion edge cases."""
-import pytest
-import tempfile
+
 import os
-from pathlib import Path
-from unittest.mock import patch, MagicMock
+import tempfile
+from unittest.mock import patch
 
 from brain.ingestion.ingest_service import (
-    IngestService,
     IngestConfig,
     IngestResult,
-    TextExtractor,
-    TextChunker,
+    IngestService,
     SecurityScanner,  # Note: This is the ingest_service version with dict return type
+    TextChunker,
+    TextExtractor,
 )
 
 
@@ -39,7 +38,7 @@ class TestTextExtractor:
 
     def test_extract_text_file(self):
         """Should extract text from plain text files."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("Test content\nwith multiple lines.")
             f.flush()
             path = f.name
@@ -47,13 +46,13 @@ class TestTextExtractor:
         try:
             content, metadata = TextExtractor.extract_text_file(path)
             assert "Test content" in content
-            assert metadata.get('line_count', 0) >= 2
+            assert metadata.get("line_count", 0) >= 2
         finally:
             os.unlink(path)
 
     def test_extract_empty_file(self):
         """Should handle empty files gracefully."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("")
             f.flush()
             path = f.name
@@ -94,7 +93,7 @@ class TestTextChunker:
         text = "This is a small text."
         chunks = chunker.chunk(text)
         assert len(chunks) == 1
-        assert chunks[0]['content'] == text
+        assert chunks[0]["content"] == text
 
     def test_chunk_large_text(self):
         """Should split large text into multiple chunks."""
@@ -110,12 +109,12 @@ class TestTextChunker:
         chunks = chunker.chunk(text)
 
         for chunk in chunks:
-            assert 'content' in chunk
-            assert 'index' in chunk
-            assert 'start_char' in chunk
-            assert 'end_char' in chunk
-            assert 'token_count' in chunk
-            assert 'char_count' in chunk
+            assert "content" in chunk
+            assert "index" in chunk
+            assert "start_char" in chunk
+            assert "end_char" in chunk
+            assert "token_count" in chunk
+            assert "char_count" in chunk
 
     def test_chunks_are_sequential(self):
         """Chunk indices should be sequential starting from 0."""
@@ -124,12 +123,12 @@ class TestTextChunker:
         chunks = chunker.chunk(text)
 
         for i, chunk in enumerate(chunks):
-            assert chunk['index'] == i
+            assert chunk["index"] == i
 
 
 class TestSecurityScanner:
     """Tests for SecurityScanner in ingestion.
-    
+
     Note: This tests the SecurityScanner from brain.ingestion.ingest_service
     which returns dict[str, list[str]] with 'pii' and 'secrets' keys.
     For the dataclass-based SecurityScanner, see test_security.py.
@@ -141,50 +140,50 @@ class TestSecurityScanner:
         content = "Contact us at test@example.com for more info."
         results = scanner.scan(content)
         assert isinstance(results, dict), "Expected dict return type"
-        assert 'email' in results.get('pii', [])
+        assert "email" in results.get("pii", [])
 
     def test_detects_phone(self):
         """Should detect phone numbers."""
         scanner = SecurityScanner()
         content = "Call us at 555-123-4567 today."
         results = scanner.scan(content)
-        assert 'phone' in results.get('pii', [])
+        assert "phone" in results.get("pii", [])
 
     def test_detects_ssn(self):
         """Should detect Social Security Numbers."""
         scanner = SecurityScanner()
         content = "SSN: 123-45-6789 is sensitive."
         results = scanner.scan(content)
-        assert 'ssn' in results.get('pii', [])
+        assert "ssn" in results.get("pii", [])
 
     def test_detects_api_key(self):
         """Should detect API key patterns."""
         scanner = SecurityScanner()
         content = "api_key = 'abcdefghijklmnopqrstuvwxyz123456'"
         results = scanner.scan(content)
-        assert 'api_key' in results.get('secrets', [])
+        assert "api_key" in results.get("secrets", [])
 
     def test_detects_github_token(self):
         """Should detect GitHub personal access tokens."""
         scanner = SecurityScanner()
         content = "token: ghp_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
         results = scanner.scan(content)
-        assert 'github_token' in results.get('secrets', [])
+        assert "github_token" in results.get("secrets", [])
 
     def test_detects_openai_key(self):
         """Should detect OpenAI API keys."""
         scanner = SecurityScanner()
         content = "OPENAI_KEY=sk-xxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
         results = scanner.scan(content)
-        assert 'openai_key' in results.get('secrets', [])
+        assert "openai_key" in results.get("secrets", [])
 
     def test_no_false_positives_on_clean_text(self):
         """Should not flag clean text as containing PII/secrets."""
         scanner = SecurityScanner()
         content = "This is normal text without any sensitive data."
         results = scanner.scan(content)
-        assert results.get('pii', []) == []
-        assert results.get('secrets', []) == []
+        assert results.get("pii", []) == []
+        assert results.get("secrets", []) == []
 
 
 class TestIngestServiceEdgeCases:
@@ -203,7 +202,7 @@ class TestIngestServiceEdgeCases:
         config = IngestConfig(max_file_size_mb=0.0001)  # Very small limit
         service = IngestService(config=config)
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.txt', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="w", suffix=".txt", delete=False) as f:
             f.write("x" * 1000)  # 1KB file
             f.flush()
             path = f.name
@@ -218,12 +217,12 @@ class TestIngestServiceEdgeCases:
     def test_ingest_document_result_structure(self):
         """IngestResult should have all required fields."""
         result = IngestResult(success=True)
-        assert hasattr(result, 'success')
-        assert hasattr(result, 'operation_id')
-        assert hasattr(result, 'documents_created')
-        assert hasattr(result, 'chunks_created')
-        assert hasattr(result, 'errors')
-        assert hasattr(result, 'duration_ms')
+        assert hasattr(result, "success")
+        assert hasattr(result, "operation_id")
+        assert hasattr(result, "documents_created")
+        assert hasattr(result, "chunks_created")
+        assert hasattr(result, "errors")
+        assert hasattr(result, "duration_ms")
 
     def test_config_defaults(self):
         """IngestConfig should have sensible defaults."""
@@ -231,8 +230,8 @@ class TestIngestServiceEdgeCases:
         assert config.chunk_tokens > 0
         assert config.overlap_tokens >= 0
         assert config.max_file_size_mb > 0
-        assert '.py' in config.include_extensions
-        assert '__pycache__' in config.exclude_patterns
+        assert ".py" in config.include_extensions
+        assert "__pycache__" in config.exclude_patterns
 
 
 class TestMalformedPDFHandling:
@@ -240,7 +239,7 @@ class TestMalformedPDFHandling:
 
     def test_pdf_extraction_with_mock(self):
         """Test PDF extraction with mocked PyPDF."""
-        with patch.object(TextExtractor, 'extract_pdf') as mock_extract:
+        with patch.object(TextExtractor, "extract_pdf") as mock_extract:
             # Simulate successful extraction
             mock_extract.return_value = ("PDF content", 5, {"title": "Test"})
 
@@ -250,7 +249,7 @@ class TestMalformedPDFHandling:
 
     def test_pdf_extraction_error_handling(self):
         """Should handle PDF extraction errors gracefully."""
-        with tempfile.NamedTemporaryFile(mode='wb', suffix='.pdf', delete=False) as f:
+        with tempfile.NamedTemporaryFile(mode="wb", suffix=".pdf", delete=False) as f:
             f.write(b"Not a valid PDF content")
             f.flush()
             path = f.name
@@ -260,7 +259,7 @@ class TestMalformedPDFHandling:
             try:
                 text, pages, meta = TextExtractor.extract_pdf(path)
                 # If it doesn't raise, content should be empty or minimal
-            except Exception as e:
+            except Exception:
                 # Expected behavior for malformed PDF
                 assert True
         finally:
@@ -283,10 +282,11 @@ class TestDuplicateRepoHandling:
         session.commit()
 
         # Query for existing repo
-        existing = session.query(Repository).filter_by(
-            tenant_id=tenant.id,
-            url="https://github.com/org/project"
-        ).first()
+        existing = (
+            session.query(Repository)
+            .filter_by(tenant_id=tenant.id, url="https://github.com/org/project")
+            .first()
+        )
 
         assert existing is not None
         assert existing.id == repo1.id
