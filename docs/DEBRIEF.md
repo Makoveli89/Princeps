@@ -1,6 +1,6 @@
 # Princeps Brain Layer - Project Debrief
 
-**Completed:** December 26, 2024  
+**Completed:** December 26, 2024
 **Location:** `F:\Princeps\brain_layer\`
 
 ---

@@ -1,14 +1,14 @@
 """Tests for security features - PII detection, tenant isolation, logging safety."""
-import pytest
+
 from uuid import uuid4
 
+from brain.core.models import DocChunk, Document, Operation
 from brain.security.security_scanner import (
-    SecurityScanner,
     PIIPattern,
     SecretPattern,
-    ScanResult,
-    scan_content,
+    SecurityScanner,
     redact_pii,
+    scan_content,
 )
 from brain.security.tenant_isolation import (
     TenantContext,
@@ -16,7 +16,6 @@ from brain.security.tenant_isolation import (
     ensure_tenant_access,
     get_tenant_filter,
 )
-from brain.core.models import Document, DocChunk, Operation
 
 
 class TestPIIDetection:
@@ -247,8 +246,8 @@ class TestCustomPatterns:
         """Should support custom PII patterns."""
         custom_pattern = PIIPattern(
             name="credit_card",
-            pattern=r'\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b',
-            severity="high"
+            pattern=r"\b\d{4}[-\s]?\d{4}[-\s]?\d{4}[-\s]?\d{4}\b",
+            severity="high",
         )
         scanner = SecurityScanner(pii_patterns=[custom_pattern])
 
@@ -259,9 +258,7 @@ class TestCustomPatterns:
     def test_custom_secret_pattern(self):
         """Should support custom secret patterns."""
         custom_pattern = SecretPattern(
-            name="aws_key",
-            pattern=r'AKIA[0-9A-Z]{16}',
-            severity="critical"
+            name="aws_key", pattern=r"AKIA[0-9A-Z]{16}", severity="critical"
         )
         scanner = SecurityScanner(secret_patterns=[custom_pattern])
 

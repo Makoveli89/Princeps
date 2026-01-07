@@ -31,14 +31,14 @@ import uuid
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any, Dict, List, Optional, Set, Tuple
+from typing import Any
 
 from framework.agents.base_agent import (
-    BaseAgent,
-    AgentTask,
-    AgentResponse,
     AgentConfig,
     AgentContext,
+    AgentResponse,
+    AgentTask,
+    BaseAgent,
     TaskStatus,
 )
 from framework.agents.brain_logger import BrainLogger, get_brain_logger
@@ -55,8 +55,10 @@ logger = logging.getLogger(__name__)
 # Enums and Configuration
 # =============================================================================
 
+
 class TopicModelType(Enum):
     """Supported topic modeling approaches."""
+
     BERTOPIC = "bertopic"
     KEYBERT = "keybert"
     ZERO_SHOT = "zero_shot"  # Zero-shot classification
@@ -66,8 +68,9 @@ class TopicModelType(Enum):
 
 class ClassificationMode(Enum):
     """How to assign topics."""
+
     SINGLE = "single"  # Assign one primary topic
-    MULTI = "multi"    # Assign multiple topics
+    MULTI = "multi"  # Assign multiple topics
     HIERARCHICAL = "hierarchical"  # Topic with subtopics
 
 
@@ -77,7 +80,7 @@ class TopicConfig:
 
     # Model settings
     model: TopicModelType = TopicModelType.KEYBERT
-    fallback_models: List[TopicModelType] = field(
+    fallback_models: list[TopicModelType] = field(
         default_factory=lambda: [
             TopicModelType.TFIDF,
             TopicModelType.LLM,
@@ -91,10 +94,10 @@ class TopicConfig:
     min_keyword_score: float = 0.3
 
     # Predefined topic categories (for zero-shot/LLM)
-    predefined_topics: Optional[List[str]] = None
+    predefined_topics: list[str] | None = None
 
     # KeyBERT settings
-    keyphrase_ngram_range: Tuple[int, int] = (1, 3)
+    keyphrase_ngram_range: tuple[int, int] = (1, 3)
     use_mmr: bool = True
     diversity: float = 0.5
     top_n_keywords: int = 10
@@ -114,12 +117,12 @@ class Topic:
 
     topic_id: int
     name: str
-    keywords: List[str]
+    keywords: list[str]
     probability: float = 1.0
-    parent_topic: Optional[str] = None
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    parent_topic: str | None = None
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "topic_id": self.topic_id,
@@ -136,14 +139,14 @@ class TopicExtractionResult:
     """Result from topic extraction."""
 
     source_id: str
-    topics: List[Topic]
-    primary_topic: Optional[Topic] = None
-    all_keywords: List[str] = field(default_factory=list)
+    topics: list[Topic]
+    primary_topic: Topic | None = None
+    all_keywords: list[str] = field(default_factory=list)
     processing_time_ms: float = 0.0
     model_used: str = ""
-    metadata: Dict[str, Any] = field(default_factory=dict)
+    metadata: dict[str, Any] = field(default_factory=dict)
 
-    def to_dict(self) -> Dict[str, Any]:
+    def to_dict(self) -> dict[str, Any]:
         """Convert to dictionary representation."""
         return {
             "source_id": self.source_id,
@@ -159,6 +162,7 @@ class TopicExtractionResult:
 # =============================================================================
 # TopicAgent Implementation
 # =============================================================================
+
 
 class TopicAgent(BaseAgent):
     """
@@ -180,10 +184,10 @@ class TopicAgent(BaseAgent):
 
     def __init__(
         self,
-        config: Optional[AgentConfig] = None,
-        topic_config: Optional[TopicConfig] = None,
-        context: Optional[AgentContext] = None,
-        brain_logger: Optional[BrainLogger] = None,
+        config: AgentConfig | None = None,
+        topic_config: TopicConfig | None = None,
+        context: AgentContext | None = None,
+        brain_logger: BrainLogger | None = None,
     ):
         super().__init__(config=config, context=context)
 
@@ -250,8 +254,7 @@ class TopicAgent(BaseAgent):
 
                 loop = asyncio.get_event_loop()
                 self._bertopic = await loop.run_in_executor(
-                    None,
-                    lambda: BERTopic(vectorizer_model=vectorizer)
+                    None, lambda: BERTopic(vectorizer_model=vectorizer)
                 )
 
                 logger.info("BERTopic model loaded")
@@ -271,9 +274,9 @@ class TopicAgent(BaseAgent):
     async def analyze_topics(
         self,
         content: str,
-        source_id: Optional[str] = None,
-        predefined_topics: Optional[List[str]] = None,
-        metadata: Optional[Dict[str, Any]] = None,
+        source_id: str | None = None,
+        predefined_topics: list[str] | None = None,
+        metadata: dict[str, Any] | None = None,
     ) -> TopicExtractionResult:
         """
         Analyze and extract topics from content.
@@ -305,7 +308,7 @@ class TopicAgent(BaseAgent):
 
         # Truncate if too long
         if len(content) > self.topic_config.max_content_length:
-            content = content[:self.topic_config.max_content_length]
+            content = content[: self.topic_config.max_content_length]
 
         # Log start
         run_id = str(uuid.uuid4())
@@ -317,9 +320,7 @@ class TopicAgent(BaseAgent):
             topics_to_use = predefined_topics or self.topic_config.predefined_topics
 
             # Try models in order
-            topics, keywords, model_used = await self._analyze_with_fallback(
-                content, topics_to_use
-            )
+            topics, keywords, model_used = await self._analyze_with_fallback(content, topics_to_use)
 
             # Determine primary topic
             primary_topic = topics[0] if topics else None
@@ -366,8 +367,8 @@ class TopicAgent(BaseAgent):
     async def _analyze_with_fallback(
         self,
         content: str,
-        predefined_topics: Optional[List[str]],
-    ) -> Tuple[List[Topic], List[str], str]:
+        predefined_topics: list[str] | None,
+    ) -> tuple[list[Topic], list[str], str]:
         """Try topic analysis models in priority order."""
         models_to_try = [self.topic_config.model] + self.topic_config.fallback_models
 
@@ -407,7 +408,7 @@ class TopicAgent(BaseAgent):
     async def _analyze_with_keybert(
         self,
         content: str,
-    ) -> Tuple[List[Topic], List[str], str]:
+    ) -> tuple[list[Topic], list[str], str]:
         """Extract topics using KeyBERT keywords."""
         keybert = await self._get_keybert()
         if keybert is None:
@@ -424,12 +425,13 @@ class TopicAgent(BaseAgent):
                     use_mmr=self.topic_config.use_mmr,
                     diversity=self.topic_config.diversity,
                     top_n=self.topic_config.top_n_keywords,
-                )
+                ),
             )
 
             # Filter by score
             filtered_keywords = [
-                (kw, score) for kw, score in keywords
+                (kw, score)
+                for kw, score in keywords
                 if score >= self.topic_config.min_keyword_score
             ]
 
@@ -440,13 +442,15 @@ class TopicAgent(BaseAgent):
             topics = []
             all_keywords = []
 
-            for i, (kw, score) in enumerate(filtered_keywords[:self.topic_config.max_topics]):
-                topics.append(Topic(
-                    topic_id=i,
-                    name=kw.title(),
-                    keywords=[kw],
-                    probability=score,
-                ))
+            for i, (kw, score) in enumerate(filtered_keywords[: self.topic_config.max_topics]):
+                topics.append(
+                    Topic(
+                        topic_id=i,
+                        name=kw.title(),
+                        keywords=[kw],
+                        probability=score,
+                    )
+                )
                 all_keywords.append(kw)
 
             return topics, all_keywords, "keybert"
@@ -458,7 +462,7 @@ class TopicAgent(BaseAgent):
     async def _analyze_with_bertopic(
         self,
         content: str,
-    ) -> Tuple[List[Topic], List[str], str]:
+    ) -> tuple[list[Topic], list[str], str]:
         """Extract topics using BERTopic."""
         bertopic = await self._get_bertopic()
         if bertopic is None:
@@ -474,8 +478,7 @@ class TopicAgent(BaseAgent):
                 return [], [], ""
 
             topic_ids, _ = await loop.run_in_executor(
-                None,
-                lambda: bertopic.fit_transform(sentences)
+                None, lambda: bertopic.fit_transform(sentences)
             )
 
             topic_info = bertopic.get_topic_info()
@@ -491,12 +494,14 @@ class TopicAgent(BaseAgent):
                 if isinstance(keywords, str):
                     keywords = [keywords]
 
-                topics.append(Topic(
-                    topic_id=int(row["Topic"]),
-                    name=row.get("Name", f"Topic {row['Topic']}"),
-                    keywords=keywords[:5] if keywords else [],
-                    probability=1.0,
-                ))
+                topics.append(
+                    Topic(
+                        topic_id=int(row["Topic"]),
+                        name=row.get("Name", f"Topic {row['Topic']}"),
+                        keywords=keywords[:5] if keywords else [],
+                        probability=1.0,
+                    )
+                )
 
                 all_keywords.extend(keywords[:5] if keywords else [])
 
@@ -512,8 +517,8 @@ class TopicAgent(BaseAgent):
     async def _analyze_with_zero_shot(
         self,
         content: str,
-        categories: List[str],
-    ) -> Tuple[List[Topic], List[str], str]:
+        categories: list[str],
+    ) -> tuple[list[Topic], list[str], str]:
         """Classify into predefined categories using zero-shot."""
         try:
             from transformers import pipeline
@@ -521,8 +526,7 @@ class TopicAgent(BaseAgent):
             loop = asyncio.get_event_loop()
 
             classifier = await loop.run_in_executor(
-                None,
-                lambda: pipeline("zero-shot-classification")
+                None, lambda: pipeline("zero-shot-classification")
             )
 
             result = await loop.run_in_executor(
@@ -531,18 +535,20 @@ class TopicAgent(BaseAgent):
                     content[:1000],  # Limit input length
                     categories,
                     multi_label=self.topic_config.mode == ClassificationMode.MULTI,
-                )
+                ),
             )
 
             topics = []
             for i, (label, score) in enumerate(zip(result["labels"], result["scores"])):
                 if score >= self.topic_config.min_probability:
-                    topics.append(Topic(
-                        topic_id=i,
-                        name=label,
-                        keywords=[label.lower()],
-                        probability=score,
-                    ))
+                    topics.append(
+                        Topic(
+                            topic_id=i,
+                            name=label,
+                            keywords=[label.lower()],
+                            probability=score,
+                        )
+                    )
 
                 if len(topics) >= self.topic_config.max_topics:
                     break
@@ -557,12 +563,14 @@ class TopicAgent(BaseAgent):
     async def _analyze_with_llm(
         self,
         content: str,
-        predefined_topics: Optional[List[str]],
-    ) -> Tuple[List[Topic], List[str], str]:
+        predefined_topics: list[str] | None,
+    ) -> tuple[list[Topic], list[str], str]:
         """Extract topics using LLM."""
         try:
             if predefined_topics:
-                topics_hint = f"Choose from these categories if applicable: {', '.join(predefined_topics)}"
+                topics_hint = (
+                    f"Choose from these categories if applicable: {', '.join(predefined_topics)}"
+                )
             else:
                 topics_hint = "Identify the main topics/themes"
 
@@ -613,12 +621,14 @@ Machine Learning | neural networks, deep learning, training | 0.9"""
 
                 keywords = [k.strip() for k in keywords_str.split(",") if k.strip()]
 
-                topics.append(Topic(
-                    topic_id=i,
-                    name=name,
-                    keywords=keywords,
-                    probability=score,
-                ))
+                topics.append(
+                    Topic(
+                        topic_id=i,
+                        name=name,
+                        keywords=keywords,
+                        probability=score,
+                    )
+                )
 
                 all_keywords.extend(keywords)
 
@@ -634,7 +644,7 @@ Machine Learning | neural networks, deep learning, training | 0.9"""
     async def _analyze_with_tfidf(
         self,
         content: str,
-    ) -> Tuple[List[Topic], List[str], str]:
+    ) -> tuple[list[Topic], list[str], str]:
         """Simple TF-IDF keyword extraction as fallback."""
         try:
             from sklearn.feature_extraction.text import TfidfVectorizer
@@ -646,10 +656,7 @@ Machine Learning | neural networks, deep learning, training | 0.9"""
             )
 
             loop = asyncio.get_event_loop()
-            await loop.run_in_executor(
-                None,
-                lambda: vectorizer.fit_transform([content])
-            )
+            await loop.run_in_executor(None, lambda: vectorizer.fit_transform([content]))
 
             feature_names = vectorizer.get_feature_names_out().tolist()
 
@@ -657,12 +664,14 @@ Machine Learning | neural networks, deep learning, training | 0.9"""
                 return [], [], ""
 
             # Create a single topic from keywords
-            topics = [Topic(
-                topic_id=0,
-                name="Keywords",
-                keywords=feature_names[:self.topic_config.top_n_keywords],
-                probability=1.0,
-            )]
+            topics = [
+                Topic(
+                    topic_id=0,
+                    name="Keywords",
+                    keywords=feature_names[: self.topic_config.top_n_keywords],
+                    probability=1.0,
+                )
+            ]
 
             return topics, feature_names, "tfidf"
 
@@ -677,7 +686,7 @@ Machine Learning | neural networks, deep learning, training | 0.9"""
     async def _store_topics(
         self,
         source_id: str,
-        topics: List[Topic],
+        topics: list[Topic],
     ) -> None:
         """Store topics in Brain Layer."""
         try:
@@ -696,15 +705,17 @@ Machine Learning | neural networks, deep learning, training | 0.9"""
                             f"{source_id}:{topic.name}".encode()
                         ).hexdigest()
 
-                        records.append({
-                            "id": topic_id_hash,
-                            "document_id": source_id,
-                            "topic_id": topic.topic_id,
-                            "name": topic.name,
-                            "keywords": topic.keywords,
-                            "probability": topic.probability,
-                            "created_at": datetime.utcnow().isoformat(),
-                        })
+                        records.append(
+                            {
+                                "id": topic_id_hash,
+                                "document_id": source_id,
+                                "topic_id": topic.topic_id,
+                                "name": topic.name,
+                                "keywords": topic.keywords,
+                                "probability": topic.probability,
+                                "created_at": datetime.utcnow().isoformat(),
+                            }
+                        )
 
                     await client.table("document_topics").upsert(records).execute()
 
@@ -810,7 +821,7 @@ Machine Learning | neural networks, deep learning, training | 0.9"""
             },
         )
 
-    def get_stats(self) -> Dict[str, Any]:
+    def get_stats(self) -> dict[str, Any]:
         """Get topic analysis statistics."""
         return self._stats.copy()
 
@@ -819,10 +830,11 @@ Machine Learning | neural networks, deep learning, training | 0.9"""
 # Factory Function
 # =============================================================================
 
+
 def create_topic_agent(
-    config: Optional[AgentConfig] = None,
-    topic_config: Optional[TopicConfig] = None,
-    context: Optional[AgentContext] = None,
+    config: AgentConfig | None = None,
+    topic_config: TopicConfig | None = None,
+    context: AgentContext | None = None,
 ) -> TopicAgent:
     """
     Factory function to create a TopicAgent.

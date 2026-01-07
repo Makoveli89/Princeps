@@ -27,27 +27,22 @@ Adapted from patterns in:
 """
 
 import asyncio
+import json
 import logging
 import os
-import json
 import re
-import subprocess
 import shlex
-import tempfile
-from dataclasses import dataclass
-from datetime import datetime
-from pathlib import Path
-from typing import Any, Dict, List, Optional, Set
+from typing import Any
 from urllib.parse import urlparse
 
 from framework.tools.tool_registry import (
     BaseTool,
+    ToolCategory,
     ToolDefinition,
+    ToolExecutionStatus,
     ToolParameter,
     ToolResult,
-    ToolCategory,
     ToolSecurityLevel,
-    ToolExecutionStatus,
 )
 
 logger = logging.getLogger(__name__)
@@ -66,38 +61,38 @@ class ShellTool(BaseTool):
 
     # Dangerous command patterns that are blocked
     BLOCKED_PATTERNS = [
-        r'\brm\s+(-[rf]+\s+)?/',  # rm with root paths
-        r'\brm\s+(-[rf]+\s+)?\*',  # rm with wildcards
-        r'\bdd\b',  # dd command
-        r'\bmkfs\b',  # filesystem commands
-        r'\bfdisk\b',
-        r'\bsudo\b',  # privilege escalation
-        r'\bsu\s',
-        r'\bchmod\s+777\b',  # dangerous permissions
-        r'\bchown\b.*root',
-        r'\b(>|>>)\s*/dev/',  # writing to devices
-        r'\bcurl\b.*\|\s*(ba)?sh',  # curl pipe to shell
-        r'\bwget\b.*\|\s*(ba)?sh',
-        r'\beval\b',  # eval commands
-        r'\bexec\b',
-        r';\s*(rm|dd|mkfs)',  # chained dangerous commands
-        r'\|\s*(rm|dd|mkfs)',
-        r'`.*`',  # command substitution (potential injection)
-        r'\$\(.*\)',
-        r'\bshutdown\b',
-        r'\breboot\b',
-        r'\bhalt\b',
-        r'\binit\s+[0-6]\b',
+        r"\brm\s+(-[rf]+\s+)?/",  # rm with root paths
+        r"\brm\s+(-[rf]+\s+)?\*",  # rm with wildcards
+        r"\bdd\b",  # dd command
+        r"\bmkfs\b",  # filesystem commands
+        r"\bfdisk\b",
+        r"\bsudo\b",  # privilege escalation
+        r"\bsu\s",
+        r"\bchmod\s+777\b",  # dangerous permissions
+        r"\bchown\b.*root",
+        r"\b(>|>>)\s*/dev/",  # writing to devices
+        r"\bcurl\b.*\|\s*(ba)?sh",  # curl pipe to shell
+        r"\bwget\b.*\|\s*(ba)?sh",
+        r"\beval\b",  # eval commands
+        r"\bexec\b",
+        r";\s*(rm|dd|mkfs)",  # chained dangerous commands
+        r"\|\s*(rm|dd|mkfs)",
+        r"`.*`",  # command substitution (potential injection)
+        r"\$\(.*\)",
+        r"\bshutdown\b",
+        r"\breboot\b",
+        r"\bhalt\b",
+        r"\binit\s+[0-6]\b",
     ]
 
     # Allowed commands (if set, only these are allowed)
-    ALLOWED_COMMANDS: Optional[Set[str]] = None  # None = allow all except blocked
+    ALLOWED_COMMANDS: set[str] | None = None  # None = allow all except blocked
 
     def __init__(
         self,
-        sandbox_dir: Optional[str] = None,
-        allowed_commands: Optional[Set[str]] = None,
-        blocked_patterns: Optional[List[str]] = None,
+        sandbox_dir: str | None = None,
+        allowed_commands: set[str] | None = None,
+        blocked_patterns: list[str] | None = None,
         max_output_size: int = 100000,  # 100KB
     ):
         super().__init__()
@@ -146,7 +141,7 @@ class ShellTool(BaseTool):
             required_permissions={"shell.execute"},
         )
 
-    def _is_command_safe(self, command: str) -> tuple[bool, Optional[str]]:
+    def _is_command_safe(self, command: str) -> tuple[bool, str | None]:
         """Check if a command is safe to execute"""
         # Check blocked patterns
         for pattern in self.blocked_patterns:
@@ -158,7 +153,7 @@ class ShellTool(BaseTool):
             # Extract base command
             parts = shlex.split(command)
             if parts:
-                base_cmd = parts[0].split('/')[-1]  # Get basename
+                base_cmd = parts[0].split("/")[-1]  # Get basename
                 if base_cmd not in self.allowed_commands:
                     return False, f"Command '{base_cmd}' not in allowed list"
 
@@ -166,8 +161,8 @@ class ShellTool(BaseTool):
 
     async def execute(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         command = parameters.get("command", "")
         working_dir = parameters.get("working_dir", self.sandbox_dir)
@@ -213,10 +208,7 @@ class ShellTool(BaseTool):
             )
 
             try:
-                stdout, stderr = await asyncio.wait_for(
-                    process.communicate(),
-                    timeout=timeout
-                )
+                stdout, stderr = await asyncio.wait_for(process.communicate(), timeout=timeout)
             except asyncio.TimeoutError:
                 process.kill()
                 return ToolResult(
@@ -227,8 +219,10 @@ class ShellTool(BaseTool):
                 )
 
             # Truncate output if too large
-            stdout_str = stdout.decode('utf-8', errors='replace')[:self.max_output_size]
-            stderr_str = stderr.decode('utf-8', errors='replace')[:self.max_output_size] if stderr else ""
+            stdout_str = stdout.decode("utf-8", errors="replace")[: self.max_output_size]
+            stderr_str = (
+                stderr.decode("utf-8", errors="replace")[: self.max_output_size] if stderr else ""
+            )
 
             output = {
                 "stdout": stdout_str,
@@ -260,14 +254,14 @@ class ShellTool(BaseTool):
                 error_type=type(e).__name__,
             )
 
-    def _get_sanitized_env(self) -> Dict[str, str]:
+    def _get_sanitized_env(self) -> dict[str, str]:
         """Get sanitized environment variables"""
         # Start with minimal environment
-        safe_vars = ['PATH', 'HOME', 'USER', 'LANG', 'LC_ALL', 'TERM']
+        safe_vars = ["PATH", "HOME", "USER", "LANG", "LC_ALL", "TERM"]
         env = {k: v for k, v in os.environ.items() if k in safe_vars}
 
         # Add safe defaults
-        env.setdefault('PATH', '/usr/bin:/bin')
+        env.setdefault("PATH", "/usr/bin:/bin")
 
         return env
 
@@ -285,8 +279,8 @@ class WebRequestTool(BaseTool):
 
     def __init__(
         self,
-        allowed_domains: Optional[Set[str]] = None,
-        blocked_domains: Optional[Set[str]] = None,
+        allowed_domains: set[str] | None = None,
+        blocked_domains: set[str] | None = None,
         max_response_size: int = 10 * 1024 * 1024,  # 10MB
         default_timeout: int = 30,
     ):
@@ -343,15 +337,15 @@ class WebRequestTool(BaseTool):
             required_permissions={"network.http"},
         )
 
-    def _is_domain_allowed(self, url: str) -> tuple[bool, Optional[str]]:
+    def _is_domain_allowed(self, url: str) -> tuple[bool, str | None]:
         """Check if the domain is allowed"""
         try:
             parsed = urlparse(url)
             domain = parsed.netloc.lower()
 
             # Remove port if present
-            if ':' in domain:
-                domain = domain.split(':')[0]
+            if ":" in domain:
+                domain = domain.split(":")[0]
 
             # Check blocklist
             if domain in self.blocked_domains:
@@ -363,7 +357,7 @@ class WebRequestTool(BaseTool):
                     # Also check subdomains
                     allowed = False
                     for allowed_domain in self.allowed_domains:
-                        if domain == allowed_domain or domain.endswith('.' + allowed_domain):
+                        if domain == allowed_domain or domain.endswith("." + allowed_domain):
                             allowed = True
                             break
                     if not allowed:
@@ -376,8 +370,8 @@ class WebRequestTool(BaseTool):
 
     async def execute(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         url = parameters.get("url", "")
         method = parameters.get("method", "GET").upper()
@@ -413,7 +407,7 @@ class WebRequestTool(BaseTool):
 
                 async with session.request(method, url, **kwargs) as response:
                     # Check response size
-                    content_length = response.headers.get('Content-Length')
+                    content_length = response.headers.get("Content-Length")
                     if content_length and int(content_length) > self.max_response_size:
                         return ToolResult(
                             tool_name="web_request",
@@ -425,11 +419,11 @@ class WebRequestTool(BaseTool):
                     # Read response
                     content = await response.read()
                     if len(content) > self.max_response_size:
-                        content = content[:self.max_response_size]
+                        content = content[: self.max_response_size]
 
                     # Try to decode as text
                     try:
-                        text = content.decode('utf-8')
+                        text = content.decode("utf-8")
                         # Try to parse as JSON
                         try:
                             data = json.loads(text)
@@ -493,12 +487,12 @@ class WebRequestTool(BaseTool):
 
     async def _execute_with_urllib(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         """Fallback implementation using urllib"""
-        import urllib.request
         import urllib.error
+        import urllib.request
 
         url = parameters.get("url", "")
         method = parameters.get("method", "GET").upper()
@@ -510,10 +504,10 @@ class WebRequestTool(BaseTool):
             data = None
             if body and method in ["POST", "PUT", "PATCH"]:
                 if isinstance(body, dict):
-                    data = json.dumps(body).encode('utf-8')
-                    headers.setdefault('Content-Type', 'application/json')
+                    data = json.dumps(body).encode("utf-8")
+                    headers.setdefault("Content-Type", "application/json")
                 else:
-                    data = str(body).encode('utf-8')
+                    data = str(body).encode("utf-8")
 
             request = urllib.request.Request(
                 url,
@@ -523,9 +517,9 @@ class WebRequestTool(BaseTool):
             )
 
             with urllib.request.urlopen(request, timeout=timeout) as response:
-                content = response.read()[:self.max_response_size]
+                content = response.read()[: self.max_response_size]
                 try:
-                    text = content.decode('utf-8')
+                    text = content.decode("utf-8")
                     try:
                         data = json.loads(text)
                         output = {
@@ -579,7 +573,7 @@ class FileReadTool(BaseTool):
 
     def __init__(
         self,
-        allowed_directories: Optional[List[str]] = None,
+        allowed_directories: list[str] | None = None,
         max_file_size: int = 10 * 1024 * 1024,  # 10MB
     ):
         super().__init__()
@@ -620,7 +614,7 @@ class FileReadTool(BaseTool):
             required_permissions={"file.read"},
         )
 
-    def _is_path_allowed(self, path: str) -> tuple[bool, Optional[str]]:
+    def _is_path_allowed(self, path: str) -> tuple[bool, str | None]:
         """Check if path is within allowed directories"""
         if not self.allowed_directories:
             return True, None
@@ -635,8 +629,8 @@ class FileReadTool(BaseTool):
 
     async def execute(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         path = parameters.get("path", "")
         encoding = parameters.get("encoding", "utf-8")
@@ -672,8 +666,8 @@ class FileReadTool(BaseTool):
                 )
 
             # Read file
-            mode = 'rb' if binary else 'r'
-            kwargs = {} if binary else {'encoding': encoding}
+            mode = "rb" if binary else "r"
+            kwargs = {} if binary else {"encoding": encoding}
 
             with open(path, mode, **kwargs) as f:
                 content = f.read()
@@ -714,7 +708,7 @@ class FileWriteTool(BaseTool):
 
     def __init__(
         self,
-        allowed_directories: Optional[List[str]] = None,
+        allowed_directories: list[str] | None = None,
         max_file_size: int = 10 * 1024 * 1024,  # 10MB
     ):
         super().__init__()
@@ -769,7 +763,7 @@ class FileWriteTool(BaseTool):
             required_permissions={"file.write"},
         )
 
-    def _is_path_allowed(self, path: str) -> tuple[bool, Optional[str]]:
+    def _is_path_allowed(self, path: str) -> tuple[bool, str | None]:
         """Check if path is within allowed directories"""
         if not self.allowed_directories:
             return True, None
@@ -784,8 +778,8 @@ class FileWriteTool(BaseTool):
 
     async def execute(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         path = parameters.get("path", "")
         content = parameters.get("content", "")
@@ -819,7 +813,7 @@ class FileWriteTool(BaseTool):
                 os.makedirs(os.path.dirname(path), exist_ok=True)
 
             # Write file
-            file_mode = 'a' if mode == 'append' else 'w'
+            file_mode = "a" if mode == "append" else "w"
             with open(path, file_mode, encoding=encoding) as f:
                 f.write(content)
 
@@ -873,7 +867,17 @@ class JSONTransformTool(BaseTool):
                     type="string",
                     description="Operation: 'get', 'set', 'filter', 'map', 'sort', 'merge'",
                     required=True,
-                    allowed_values=["get", "set", "filter", "map", "sort", "merge", "keys", "values", "flatten"],
+                    allowed_values=[
+                        "get",
+                        "set",
+                        "filter",
+                        "map",
+                        "sort",
+                        "merge",
+                        "keys",
+                        "values",
+                        "flatten",
+                    ],
                 ),
                 ToolParameter(
                     name="path",
@@ -906,8 +910,8 @@ class JSONTransformTool(BaseTool):
 
     async def execute(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         data = parameters.get("data")
         operation = parameters.get("operation")
@@ -969,7 +973,7 @@ class JSONTransformTool(BaseTool):
         if not path:
             return data
 
-        parts = re.split(r'\.|\[|\]', path)
+        parts = re.split(r"\.|\[|\]", path)
         parts = [p for p in parts if p]
 
         result = data
@@ -987,12 +991,13 @@ class JSONTransformTool(BaseTool):
     def _set_path(self, data: Any, path: str, value: Any) -> Any:
         """Set value at path (returns new data, doesn't mutate)"""
         import copy
+
         data = copy.deepcopy(data)
 
         if not path:
             return value
 
-        parts = re.split(r'\.|\[|\]', path)
+        parts = re.split(r"\.|\[|\]", path)
         parts = [p for p in parts if p]
 
         current = data
@@ -1020,7 +1025,7 @@ class JSONTransformTool(BaseTool):
 
         return data
 
-    def _flatten(self, data: Any, parent_key: str = '', sep: str = '.') -> Dict:
+    def _flatten(self, data: Any, parent_key: str = "", sep: str = ".") -> dict:
         """Flatten nested dict/list to single level"""
         items = []
         if isinstance(data, dict):
@@ -1039,7 +1044,7 @@ class JSONTransformTool(BaseTool):
                     items.append((new_key, v))
         return dict(items)
 
-    def _sort_data(self, data: Any, key: Optional[str]) -> Any:
+    def _sort_data(self, data: Any, key: str | None) -> Any:
         """Sort list data"""
         if not isinstance(data, list):
             return data
@@ -1079,8 +1084,8 @@ class WaitTool(BaseTool):
 
     async def execute(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         seconds = min(parameters.get("seconds", 1), 300)  # Max 5 minutes
         reason = parameters.get("reason", "")
@@ -1145,8 +1150,8 @@ class LogTool(BaseTool):
 
     async def execute(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         message = parameters.get("message", "")
         level = parameters.get("level", "info")
@@ -1207,8 +1212,8 @@ class StoreVariableTool(BaseTool):
 
     async def execute(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         name = parameters.get("name", "")
         value = parameters.get("value")
@@ -1261,8 +1266,8 @@ class GetVariableTool(BaseTool):
 
     async def execute(
         self,
-        parameters: Dict[str, Any],
-        context: Optional[Dict[str, Any]] = None,
+        parameters: dict[str, Any],
+        context: dict[str, Any] | None = None,
     ) -> ToolResult:
         name = parameters.get("name", "")
         default = parameters.get("default")
@@ -1281,9 +1286,9 @@ class GetVariableTool(BaseTool):
 
 def register_builtin_tools(
     registry=None,
-    shell_sandbox: Optional[str] = None,
-    file_directories: Optional[List[str]] = None,
-    allowed_domains: Optional[Set[str]] = None,
+    shell_sandbox: str | None = None,
+    file_directories: list[str] | None = None,
+    allowed_domains: set[str] | None = None,
 ):
     """
     Register all built-in tools with the registry.

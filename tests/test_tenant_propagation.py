@@ -1,14 +1,25 @@
 """Tests for tenant ID propagation in all DB writes."""
-import pytest
-from uuid import uuid4
 
+from brain.core.db import compute_content_hash, get_or_create_operation
 from brain.core.models import (
-    Tenant, Document, DocChunk, Operation, Artifact,
-    DocumentSummary, DocumentEntity, DocumentTopic, DocumentConcept,
-    Repository, Resource, AgentRun, KnowledgeNode,
-    OperationTypeEnum, OperationStatusEnum, ResourceTypeEnum, NodeKnowledgeTypeEnum, ArtifactTypeEnum,
+    AgentRun,
+    Artifact,
+    ArtifactTypeEnum,
+    DocChunk,
+    Document,
+    DocumentConcept,
+    DocumentEntity,
+    DocumentSummary,
+    DocumentTopic,
+    KnowledgeNode,
+    NodeKnowledgeTypeEnum,
+    Operation,
+    OperationTypeEnum,
+    Repository,
+    Resource,
+    ResourceTypeEnum,
+    Tenant,
 )
-from brain.core.db import get_or_create_operation, compute_content_hash
 
 
 class TestTenantPropagation:
@@ -46,10 +57,7 @@ class TestTenantPropagation:
     def test_operation_has_tenant(self, session, tenant):
         """Operation should have tenant_id."""
         operation, _ = get_or_create_operation(
-            session,
-            str(tenant.id),
-            OperationTypeEnum.INGEST_DOCUMENT,
-            {"path": "/test/path.pdf"}
+            session, str(tenant.id), OperationTypeEnum.INGEST_DOCUMENT, {"path": "/test/path.pdf"}
         )
         session.commit()
 
@@ -61,7 +69,7 @@ class TestTenantPropagation:
             session,
             str(tenant.id),
             OperationTypeEnum.INGEST_DOCUMENT,
-            {"path": "/test/artifact.pdf"}
+            {"path": "/test/artifact.pdf"},
         )
         session.commit()
 
@@ -206,20 +214,24 @@ class TestTenantIsolationInQueries:
         content1 = "Content1"
         content2 = "Content2"
         doc1 = Document(
-            tenant_id=tenant1.id, title="Doc1", content=content1,
-            content_hash=compute_content_hash(content1), source="test"
+            tenant_id=tenant1.id,
+            title="Doc1",
+            content=content1,
+            content_hash=compute_content_hash(content1),
+            source="test",
         )
         doc2 = Document(
-            tenant_id=tenant2.id, title="Doc2", content=content2,
-            content_hash=compute_content_hash(content2), source="test"
+            tenant_id=tenant2.id,
+            title="Doc2",
+            content=content2,
+            content_hash=compute_content_hash(content2),
+            source="test",
         )
         session.add_all([doc1, doc2])
         session.commit()
 
         # Query for tenant1 only
-        tenant1_docs = session.query(Document).filter(
-            Document.tenant_id == tenant1.id
-        ).all()
+        tenant1_docs = session.query(Document).filter(Document.tenant_id == tenant1.id).all()
 
         assert len(tenant1_docs) == 1
         assert tenant1_docs[0].title == "Doc1"
@@ -234,12 +246,18 @@ class TestTenantIsolationInQueries:
         c1 = "C1"
         c2 = "C2"
         doc1 = Document(
-            tenant_id=tenant1.id, title="Doc1", content=c1,
-            content_hash=compute_content_hash(c1), source="test"
+            tenant_id=tenant1.id,
+            title="Doc1",
+            content=c1,
+            content_hash=compute_content_hash(c1),
+            source="test",
         )
         doc2 = Document(
-            tenant_id=tenant2.id, title="Doc2", content=c2,
-            content_hash=compute_content_hash(c2), source="test"
+            tenant_id=tenant2.id,
+            title="Doc2",
+            content=c2,
+            content_hash=compute_content_hash(c2),
+            source="test",
         )
         session.add_all([doc1, doc2])
         session.commit()
@@ -250,9 +268,7 @@ class TestTenantIsolationInQueries:
         session.commit()
 
         # Query for tenant1 only
-        tenant1_chunks = session.query(DocChunk).filter(
-            DocChunk.tenant_id == tenant1.id
-        ).all()
+        tenant1_chunks = session.query(DocChunk).filter(DocChunk.tenant_id == tenant1.id).all()
 
         assert len(tenant1_chunks) == 1
         assert tenant1_chunks[0].content == "C1"
@@ -273,9 +289,7 @@ class TestTenantIsolationInQueries:
         session.commit()
 
         # Query for tenant1 only
-        tenant1_ops = session.query(Operation).filter(
-            Operation.tenant_id == tenant1.id
-        ).all()
+        tenant1_ops = session.query(Operation).filter(Operation.tenant_id == tenant1.id).all()
 
         assert len(tenant1_ops) == 1
 
