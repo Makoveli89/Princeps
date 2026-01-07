@@ -98,7 +98,7 @@ async def lifespan(app: FastAPI):
         init_db(engine)
         logger.info("database_initialized")
     except Exception as e:
-        logger.error("database_initialization_failed", error=str(e))
+        logger.error(f"database_initialization_failed: {e}")
 
     yield
     # Cleanup if needed
@@ -242,7 +242,7 @@ def get_db():
             yield session
     except Exception as e:
         # Yield None if DB is down, to allow fallback logic in endpoints
-        logger.error("db_connection_failed", error=str(e))
+        logger.error(f"db_connection_failed: {e}")
         yield None
 
 
