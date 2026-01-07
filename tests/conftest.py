@@ -131,10 +131,10 @@ except ImportError:
     pass
 
 # Now import models (after patching)
-from brain.core.models import Base, DocChunk, Document, Tenant
-
 # Import httpx for async API testing
-from httpx import AsyncClient, ASGITransport
+from httpx import ASGITransport, AsyncClient
+
+from brain.core.models import Base, DocChunk, Document, Tenant
 
 
 @pytest.fixture(scope="session")

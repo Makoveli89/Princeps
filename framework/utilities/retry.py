@@ -2,17 +2,19 @@ import asyncio
 import functools
 import logging
 import random
-from typing import Type, Tuple, Union, Callable, Any
+from collections.abc import Callable
+from typing import Any
 
 logger = logging.getLogger(__name__)
+
 
 def async_retry(
     max_retries: int = 3,
     initial_delay: float = 1.0,
     max_delay: float = 60.0,
     backoff_factor: float = 2.0,
-    exceptions: Union[Type[Exception], Tuple[Type[Exception], ...]] = (Exception,),
-    jitter: bool = True
+    exceptions: type[Exception] | tuple[type[Exception], ...] = (Exception,),
+    jitter: bool = True,
 ) -> Callable:
     """
     A dependency-free decorator to retry async functions with exponential backoff.
@@ -28,6 +30,7 @@ def async_retry(
     Returns:
         Callable: The decorated function.
     """
+
     def decorator(func: Callable) -> Callable:
         @functools.wraps(func)
         async def wrapper(*args: Any, **kwargs: Any) -> Any:
@@ -40,7 +43,9 @@ def async_retry(
                 except exceptions as e:
                     attempt += 1
                     if attempt > max_retries:
-                        logger.error(f"Function {func.__name__} failed after {max_retries} retries. Last error: {str(e)}")
+                        logger.error(
+                            f"Function {func.__name__} failed after {max_retries} retries. Last error: {str(e)}"
+                        )
                         raise e
 
                     delay = current_delay
@@ -55,5 +60,7 @@ def async_retry(
                     await asyncio.sleep(delay)
 
                     current_delay = min(current_delay * backoff_factor, max_delay)
+
         return wrapper
+
     return decorator

@@ -11,9 +11,17 @@ from typing import Any
 
 import structlog
 import uvicorn
-from fastapi import FastAPI, HTTPException, Depends, BackgroundTasks, UploadFile, File, Form, Request
-from fastapi.responses import JSONResponse
+from fastapi import (
+    Depends,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import JSONResponse
 from pydantic import BaseModel
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
@@ -116,6 +124,7 @@ app.add_middleware(SlowAPIMiddleware)
 
 # --- Global Exception Handler ---
 
+
 @app.exception_handler(Exception)
 async def global_exception_handler(request: Request, exc: Exception):
     """
@@ -137,7 +146,9 @@ async def global_exception_handler(request: Request, exc: Exception):
 
         # We should use the structlog logger.
         struct_logger = structlog.get_logger()
-        struct_logger.error("unhandled_exception", error_id=error_id, error=str(exc), path=path, method=method)
+        struct_logger.error(
+            "unhandled_exception", error_id=error_id, error=str(exc), path=path, method=method
+        )
 
         return JSONResponse(
             status_code=500,
@@ -150,6 +161,7 @@ async def global_exception_handler(request: Request, exc: Exception):
             status_code=500,
             content={"detail": "Internal server error (handler failed)."},
         )
+
 
 # --- Types ---
 
