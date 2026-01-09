@@ -105,7 +105,9 @@ async def lifespan(app: FastAPI):
 
     # Store in app.state for reuse (connection pooling)
     if db_url.startswith("sqlite"):
-        app.state.vector_index = create_sqlite_index(connection_string=db_url, table_name="doc_chunks")
+        app.state.vector_index = create_sqlite_index(
+            connection_string=db_url, table_name="doc_chunks"
+        )
     else:
         app.state.vector_index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
 
