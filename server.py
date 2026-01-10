@@ -22,7 +22,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -179,8 +179,15 @@ class WorkspaceDTO(BaseModel):
 
 
 class CreateWorkspaceRequest(BaseModel):
-    name: str
-    description: str
+    name: str = Field(
+        ...,
+        max_length=50,
+        pattern=r"^[a-zA-Z0-9 _-]+$",
+        description="Workspace name (max 50 chars, alphanumeric, spaces, dashes, underscores)",
+    )
+    description: str = Field(
+        ..., max_length=200, description="Workspace description (max 200 chars)"
+    )
 
 
 class AgentDTO(BaseModel):
