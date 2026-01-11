@@ -391,12 +391,16 @@ def get_workspaces(db=Depends(get_db)):
         .scalar_subquery()
     )
 
-    tenants_with_counts = db.query(
-        Tenant,
-        doc_count_sub.label("doc_count"),
-        chunk_count_sub.label("chunk_count"),
-        run_count_sub.label("run_count"),
-    ).filter(Tenant.is_active == True).all()
+    tenants_with_counts = (
+        db.query(
+            Tenant,
+            doc_count_sub.label("doc_count"),
+            chunk_count_sub.label("chunk_count"),
+            run_count_sub.label("run_count"),
+        )
+        .filter(Tenant.is_active == True)
+        .all()
+    )
 
     result = []
     for t, doc_c, chunk_c, run_c in tenants_with_counts:
