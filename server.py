@@ -22,7 +22,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -179,8 +179,8 @@ class WorkspaceDTO(BaseModel):
 
 
 class CreateWorkspaceRequest(BaseModel):
-    name: str
-    description: str
+    name: str = Field(..., max_length=50, pattern=r"^[a-zA-Z0-9_\-\s]+$")
+    description: str = Field(..., max_length=200)
 
 
 class AgentDTO(BaseModel):
@@ -193,12 +193,12 @@ class AgentDTO(BaseModel):
 
 class RunRequest(BaseModel):
     agentId: str  # For now this maps to a hardcoded agent type or ID
-    input: str
+    input: str = Field(..., max_length=100000)
     workspaceId: str
 
 
 class SkillRunRequest(BaseModel):
-    query: str
+    query: str = Field(..., max_length=10000)
     workspaceId: str
 
 
@@ -237,13 +237,29 @@ class RunLogDTO(BaseModel):
 
 # --- Helper: Dependency for DB Session ---
 def get_db():
+    # Attempt to initialize session
+    db_context = None
+    session = None
     try:
-        with get_session() as session:
-            yield session
+        db_context = get_session()
+        session = db_context.__enter__()
     except Exception as e:
-        # Yield None if DB is down, to allow fallback logic in endpoints
+        # Setup failed (DB down?)
         logger.error(f"db_connection_failed: {e}")
         yield None
+        return
+
+    # Yield session for usage
+    try:
+        yield session
+    except Exception:
+        # Endpoint failed - propagate to context manager (rollback)
+        if db_context and not db_context.__exit__(*sys.exc_info()):
+            raise
+    else:
+        # Success - commit
+        if db_context:
+            db_context.__exit__(None, None, None)
 
 
 # --- Helper: Fake Agent Manager ---
