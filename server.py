@@ -22,7 +22,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -83,7 +83,7 @@ from framework.skills.resolver import SkillResolver
 
 # Initialize Logger
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)  # Don't overwrite structlog logger
 
 
 # Initialize Database on Startup
@@ -179,8 +179,8 @@ class WorkspaceDTO(BaseModel):
 
 
 class CreateWorkspaceRequest(BaseModel):
-    name: str
-    description: str
+    name: str = Field(..., max_length=50)
+    description: str = Field(..., max_length=200)
 
 
 class AgentDTO(BaseModel):
@@ -192,14 +192,14 @@ class AgentDTO(BaseModel):
 
 
 class RunRequest(BaseModel):
-    agentId: str  # For now this maps to a hardcoded agent type or ID
-    input: str
-    workspaceId: str
+    agentId: str = Field(..., max_length=100)  # For now this maps to a hardcoded agent type or ID
+    input: str = Field(..., max_length=100000)
+    workspaceId: str = Field(..., max_length=100)
 
 
 class SkillRunRequest(BaseModel):
-    query: str
-    workspaceId: str
+    query: str = Field(..., max_length=10000)
+    workspaceId: str = Field(..., max_length=100)
 
 
 class StatsDTO(BaseModel):
