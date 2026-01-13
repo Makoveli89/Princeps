@@ -367,14 +367,46 @@ def get_workspaces(db=Depends(get_db)):
         # This behavior is debatable but keeps the UI working even if DB is problematic initially
         return []
 
-    tenants = db.query(Tenant).filter(Tenant.is_active == True).all()
+    # Optimize query to fetch tenants with counts in a single query
+    # Using scalar_subquery to prevent N+1 problem
+    from sqlalchemy import select, func
+
+    doc_count_sub = (
+        select(func.count(Document.id))
+        .where(Document.tenant_id == Tenant.id)
+        .correlate(Tenant)
+        .scalar_subquery()
+    )
+
+    chunk_count_sub = (
+        select(func.count(DocChunk.id))
+        .where(DocChunk.tenant_id == Tenant.id)
+        .correlate(Tenant)
+        .scalar_subquery()
+    )
+
+    run_count_sub = (
+        select(func.count(AgentRun.id))
+        .where(AgentRun.tenant_id == Tenant.id)
+        .correlate(Tenant)
+        .scalar_subquery()
+    )
+
+    stmt = select(
+        Tenant,
+        doc_count_sub.label("doc_count"),
+        chunk_count_sub.label("chunk_count"),
+        run_count_sub.label("run_count"),
+    ).where(Tenant.is_active == True)
+
+    rows = db.execute(stmt).all()
 
     result = []
-    for t in tenants:
-        # Real counts per tenant
-        doc_count = db.query(Document).filter(Document.tenant_id == t.id).count()
-        chunk_count = db.query(DocChunk).filter(DocChunk.tenant_id == t.id).count()
-        run_count = db.query(AgentRun).filter(AgentRun.tenant_id == t.id).count()
+    for row in rows:
+        t = row[0]  # Tenant object
+        doc_count = row[1] or 0
+        chunk_count = row[2] or 0
+        run_count = row[3] or 0
         agent_count = 0
 
         result.append(
