@@ -369,7 +369,7 @@ def get_workspaces(db=Depends(get_db)):
 
     # Optimize query to fetch tenants with counts in a single query
     # Using scalar_subquery to prevent N+1 problem
-    from sqlalchemy import select, func
+    from sqlalchemy import func, select
 
     doc_count_sub = (
         select(func.count(Document.id))
