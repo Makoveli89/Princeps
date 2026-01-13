@@ -1,69 +1,125 @@
 import React, { useState } from 'react';
-import { Plus, Database, Edit2, Check } from 'lucide-react';
+import { Plus, Database, Edit2, Check, Loader2 } from 'lucide-react';
+import { useSWRConfig } from 'swr';
 import { Workspace } from '../types';
+import { useToast } from '../hooks/use-toast';
 
 export const Workspaces = ({ workspaces, activeId, onChange }: { workspaces: Workspace[], activeId: string | null, onChange: (id: string) => void }) => {
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
+  const { toast } = useToast();
+  const { mutate } = useSWRConfig();
 
   const handleCreate = async () => {
-      try {
-          const res = await fetch('/api/workspaces', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({ name: newName, description: newDesc })
-          });
-          if (res.ok) {
-              window.location.reload(); // Simple reload to refresh state for now
-          } else {
-              alert('Failed to create workspace');
-          }
-      } catch (e) {
-          console.error(e);
+    if (!newName.trim()) {
+      toast({
+        title: "Error",
+        description: "Workspace name is required",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    setIsCreating(true);
+    try {
+      const res = await fetch('/api/workspaces', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ name: newName, description: newDesc })
+      });
+      if (res.ok) {
+        toast({
+          title: "Workspace created",
+          description: `Workspace "${newName}" has been created successfully.`,
+        });
+        await mutate('/api/workspaces');
+        setNewName('');
+        setNewDesc('');
+        setShowCreate(false);
+      } else {
+        const errorData = await res.json().catch(() => ({}));
+        toast({
+          title: "Failed to create workspace",
+          description: errorData.detail || "Unknown error occurred",
+          variant: "destructive",
+        });
       }
+    } catch (e) {
+      console.error(e);
+      toast({
+        title: "Error",
+        description: "Network error occurred",
+        variant: "destructive",
+      });
+    } finally {
+      setIsCreating(false);
+    }
   };
 
   return (
     <div className="space-y-6">
-       <div className="flex items-center justify-between">
-         <h2 className="text-2xl text-white gothic-font">Workspaces</h2>
-         <button
-            onClick={() => setShowCreate(!showCreate)}
-            className="bg-gray-900 border border-gray-700 text-gray-300 px-4 py-2 flex items-center gap-2 text-xs uppercase hover:bg-gray-800 transition-colors">
-            <Plus size={14} /> Create New
-         </button>
+      <div className="flex items-center justify-between">
+        <h2 className="text-2xl text-white gothic-font">Workspaces</h2>
+        <button
+          onClick={() => setShowCreate(!showCreate)}
+          className="bg-gray-900 border border-gray-700 text-gray-300 px-4 py-2 flex items-center gap-2 text-xs uppercase hover:bg-gray-800 transition-colors">
+          <Plus size={14} /> Create New
+        </button>
       </div>
 
       {showCreate && (
-          <div className="bg-[#080808] border border-gray-700 p-6 max-w-lg animate-in fade-in slide-in-from-top-4">
-              <h3 className="text-white mb-4">New Workspace</h3>
+        <div className="bg-[#080808] border border-gray-700 p-6 max-w-lg animate-in fade-in slide-in-from-top-4">
+          <h3 className="text-white mb-4">New Workspace</h3>
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="ws-name" className="sr-only">Workspace Name</label>
               <input
-                className="w-full bg-black border border-gray-800 text-white p-2 mb-2"
+                id="ws-name"
+                className="w-full bg-black border border-gray-800 text-white p-2"
                 placeholder="Workspace Name"
                 value={newName}
                 onChange={e => setNewName(e.target.value)}
+                disabled={isCreating}
               />
-               <input
-                className="w-full bg-black border border-gray-800 text-white p-2 mb-4"
+            </div>
+            <div>
+              <label htmlFor="ws-desc" className="sr-only">Description</label>
+              <input
+                id="ws-desc"
+                className="w-full bg-black border border-gray-800 text-white p-2"
                 placeholder="Description"
                 value={newDesc}
                 onChange={e => setNewDesc(e.target.value)}
+                disabled={isCreating}
               />
-              <button
-                onClick={handleCreate}
-                className="bg-cyan-900/50 text-cyan-400 border border-cyan-800 px-4 py-2 text-sm flex items-center gap-2 hover:bg-cyan-900/80">
-                  <Check size={14} /> Confirm
-              </button>
+            </div>
+            <button
+              onClick={handleCreate}
+              disabled={isCreating}
+              className="bg-cyan-900/50 text-cyan-400 border border-cyan-800 px-4 py-2 text-sm flex items-center gap-2 hover:bg-cyan-900/80 disabled:opacity-50 disabled:cursor-not-allowed">
+              {isCreating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {isCreating ? "Creating..." : "Confirm"}
+            </button>
           </div>
+        </div>
       )}
 
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
         {workspaces.map(ws => (
             <div
                 key={ws.id}
+                role="button"
+                tabIndex={0}
                 onClick={() => onChange(ws.id)}
-                className={`p-6 border relative group cursor-pointer transition-all duration-300
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    onChange(ws.id);
+                    e.preventDefault();
+                  }
+                }}
+                className={`p-6 border relative group cursor-pointer transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-500
                     ${ws.id === activeId
                         ? 'bg-cyan-950/10 border-cyan-500/50 shadow-[0_0_10px_rgba(0,243,255,0.1)]'
                         : 'bg-[#050505] border-gray-800 hover:border-gray-600'
