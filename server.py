@@ -483,7 +483,7 @@ async def ingest_document(
     MAX_FILE_SIZE = 10 * 1024 * 1024
 
     # Check if content-length header is present and valid
-    content_length = request.headers.get('content-length')
+    content_length = request.headers.get("content-length")
     if content_length and int(content_length) > MAX_FILE_SIZE:
         raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
 

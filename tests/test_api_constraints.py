@@ -1,7 +1,10 @@
 """Tests for API schema constraints."""
+
 import pytest
 from pydantic import ValidationError
+
 from server import CreateWorkspaceRequest, RunRequest, SkillRunRequest
+
 
 class TestApiSchemaConstraints:
     """Tests for API Pydantic model constraints."""
@@ -34,19 +37,11 @@ class TestApiSchemaConstraints:
 
         # Input too long
         with pytest.raises(ValidationError):
-            RunRequest(
-                agentId="agent1",
-                input="a" * 100001,
-                workspaceId="ws1"
-            )
+            RunRequest(agentId="agent1", input="a" * 100001, workspaceId="ws1")
 
         # Agent ID too long
         with pytest.raises(ValidationError):
-            RunRequest(
-                agentId="a" * 101,
-                input="input",
-                workspaceId="ws1"
-            )
+            RunRequest(agentId="a" * 101, input="input", workspaceId="ws1")
 
     def test_skill_run_request_constraints(self):
         """Test constraints for SkillRunRequest."""
@@ -57,7 +52,4 @@ class TestApiSchemaConstraints:
 
         # Query too long
         with pytest.raises(ValidationError):
-            SkillRunRequest(
-                query="a" * 10001,
-                workspaceId="ws1"
-            )
+            SkillRunRequest(query="a" * 10001, workspaceId="ws1")
