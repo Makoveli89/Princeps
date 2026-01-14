@@ -542,6 +542,11 @@ class VectorIndex(ABC):
         """Get the number of vectors in the index."""
         pass
 
+    @abstractmethod
+    async def close(self) -> None:
+        """Release resources."""
+        pass
+
 
 class InMemoryVectorIndex(VectorIndex):
     """In-memory vector index for testing and fallback."""
@@ -669,6 +674,10 @@ class InMemoryVectorIndex(VectorIndex):
         """Clear all vectors from the index."""
         async with self._lock:
             self._vectors.clear()
+
+    async def close(self) -> None:
+        """Release resources."""
+        await self.clear()
 
 
 # =============================================================================
@@ -817,6 +826,12 @@ class PgVectorIndex(VectorIndex):
             result = await conn.fetchval(query)
             return int(result)
 
+    async def close(self) -> None:
+        """Release resources."""
+        if self._pool:
+            await self._pool.close()
+            self._pool = None
+
 
 # =============================================================================
 # ChromaDB Index Adapter
@@ -957,6 +972,13 @@ class ChromaDBIndex(VectorIndex):
         await self._ensure_collection()
         return self._collection.count()
 
+    async def close(self) -> None:
+        """Release resources."""
+        # ChromaDB client doesn't explicitly require closing in this version,
+        # but we can clear references.
+        self._client = None
+        self._collection = None
+
 
 # =============================================================================
 # SQLite Index Adapter (Fallback)
@@ -1090,6 +1112,12 @@ class SQLiteVectorIndex(VectorIndex):
 
         with self._engine.connect() as conn:
             return conn.execute(text(f"SELECT COUNT(*) FROM {self.table_name}")).scalar()
+
+    async def close(self) -> None:
+        """Release resources."""
+        if self._engine:
+            self._engine.dispose()
+            self._engine = None
 
 
 # =============================================================================
