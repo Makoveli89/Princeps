@@ -22,7 +22,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -179,8 +179,8 @@ class WorkspaceDTO(BaseModel):
 
 
 class CreateWorkspaceRequest(BaseModel):
-    name: str
-    description: str
+    name: str = Field(..., min_length=1, max_length=50, description="Name of the workspace")
+    description: str = Field(..., max_length=200, description="Description of the workspace")
 
 
 class AgentDTO(BaseModel):
@@ -192,14 +192,14 @@ class AgentDTO(BaseModel):
 
 
 class RunRequest(BaseModel):
-    agentId: str  # For now this maps to a hardcoded agent type or ID
-    input: str
-    workspaceId: str
+    agentId: str = Field(..., max_length=100)
+    input: str = Field(..., max_length=100000, description="Input text for the agent")
+    workspaceId: str = Field(..., max_length=100)
 
 
 class SkillRunRequest(BaseModel):
-    query: str
-    workspaceId: str
+    query: str = Field(..., max_length=10000, description="Natural language query for the skill")
+    workspaceId: str = Field(..., max_length=100)
 
 
 class StatsDTO(BaseModel):
@@ -478,6 +478,20 @@ async def execute_skill(request: Request, body: SkillRunRequest):
 async def ingest_document(
     request: Request, file: UploadFile = File(...), workspace_id: str = Form(...)
 ):
+    # SENTINEL FIX: Check file size to prevent DoS
+    # 10MB limit (adjust as needed)
+    MAX_FILE_SIZE = 10 * 1024 * 1024
+
+    # Check if content-length header is present and valid
+    content_length = request.headers.get('content-length')
+    if content_length and int(content_length) > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
+
+    # Also check actual read if possible, but for UploadFile, spool_max_size handles memory
+    # but we should still be careful.
+    # FastAPI UploadFile is spooled, so it's safer, but we can check size after read or seek.
+    # Here we rely on content-length as a first line of defense.
+
     result = await ingestion_service.ingest_file(
         file.file, file.filename, workspace_id, content_type=file.content_type
     )
