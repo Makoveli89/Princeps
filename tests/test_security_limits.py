@@ -1,9 +1,9 @@
+import os
+import sys
+from unittest.mock import AsyncMock, MagicMock
 
 import pytest
 from fastapi.testclient import TestClient
-from unittest.mock import MagicMock, AsyncMock
-import sys
-import os
 
 # Note: This test mocks core modules globally. Run it in isolation or it may affect other tests.
 # pytest tests/test_security_limits.py
@@ -16,12 +16,17 @@ sys.path.append(os.getcwd())
 # However, for this test to work standalone, we force mocks.
 # To be safe in CI, we skip this test by default unless enabled manually or if modules are missing.
 
-@pytest.mark.skip(reason="Mocks global modules, run in isolation: pytest tests/test_security_limits.py")
+
+@pytest.mark.skip(
+    reason="Mocks global modules, run in isolation: pytest tests/test_security_limits.py"
+)
 def test_security_limits_placeholders():
     pass
 
+
 # We define the actual logic but only execute if we can setup mocks safely
 # or if we are running this file specifically.
+
 
 def setup_mocks():
     modules_to_mock = [
@@ -32,21 +37,24 @@ def setup_mocks():
         "framework.llms.multi_llm_client",
         "framework.retrieval.vector_search",
         "framework.skills.registry",
-        "framework.skills.resolver"
+        "framework.skills.resolver",
     ]
     for mod in modules_to_mock:
         if mod not in sys.modules:
             sys.modules[mod] = MagicMock()
+
 
 # Only run setup if we are main or if we decide to force it.
 # For now, we will just implement the test logic using `server` if it can be imported.
 
 try:
     setup_mocks()
-    from server import app, agent_manager, ingestion_service
+    from server import agent_manager, app, ingestion_service
+
     client = TestClient(app)
 except ImportError:
     client = None
+
 
 @pytest.mark.skipif(client is None, reason="Could not initialize client with mocks")
 def test_large_input_validation():
@@ -56,11 +64,7 @@ def test_large_input_validation():
     # 100,001 characters
     large_input = "a" * 100001
 
-    payload = {
-        "agentId": "test-agent",
-        "input": large_input,
-        "workspaceId": "test-workspace"
-    }
+    payload = {"agentId": "test-agent", "input": large_input, "workspaceId": "test-workspace"}
 
     # Mock the manager to avoid actual execution
     if hasattr(agent_manager, "run_agent"):
@@ -69,6 +73,7 @@ def test_large_input_validation():
     response = client.post("/api/run", json=payload)
 
     assert response.status_code == 422, "Should reject inputs > 100k chars"
+
 
 @pytest.mark.skipif(client is None, reason="Could not initialize client with mocks")
 def test_large_file_upload():
@@ -82,12 +87,8 @@ def test_large_file_upload():
     if hasattr(ingestion_service, "ingest_file"):
         ingestion_service.ingest_file = AsyncMock(return_value={"status": "mocked"})
 
-    files = {
-        "file": ("large_file.txt", large_content, "text/plain")
-    }
-    data = {
-        "workspace_id": "test-workspace"
-    }
+    files = {"file": ("large_file.txt", large_content, "text/plain")}
+    data = {"workspace_id": "test-workspace"}
 
     response = client.post("/api/ingest", files=files, data=data)
 
