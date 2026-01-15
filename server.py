@@ -22,7 +22,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -179,8 +179,8 @@ class WorkspaceDTO(BaseModel):
 
 
 class CreateWorkspaceRequest(BaseModel):
-    name: str
-    description: str
+    name: str = Field(..., max_length=50)
+    description: str = Field(..., max_length=200)
 
 
 class AgentDTO(BaseModel):
@@ -192,14 +192,14 @@ class AgentDTO(BaseModel):
 
 
 class RunRequest(BaseModel):
-    agentId: str  # For now this maps to a hardcoded agent type or ID
-    input: str
-    workspaceId: str
+    agentId: str = Field(..., max_length=100)  # For now this maps to a hardcoded agent type or ID
+    input: str = Field(..., max_length=100000)
+    workspaceId: str = Field(..., max_length=100)
 
 
 class SkillRunRequest(BaseModel):
-    query: str
-    workspaceId: str
+    query: str = Field(..., max_length=10000)
+    workspaceId: str = Field(..., max_length=100)
 
 
 class StatsDTO(BaseModel):
@@ -478,6 +478,26 @@ async def execute_skill(request: Request, body: SkillRunRequest):
 async def ingest_document(
     request: Request, file: UploadFile = File(...), workspace_id: str = Form(...)
 ):
+    # SENTINEL FIX: Enforce 10MB file size limit to prevent DoS
+    MAX_FILE_SIZE = 10 * 1024 * 1024  # 10MB
+
+    # Check Content-Length header first (if available)
+    content_length = request.headers.get("content-length")
+    if content_length:
+        try:
+            if int(content_length) > MAX_FILE_SIZE:
+                raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
+        except ValueError:
+            pass  # Ignore invalid header, fallback to actual size check
+
+    # Seek to end to check actual size (works with SpooledTemporaryFile)
+    file.file.seek(0, 2)
+    file_size = file.file.tell()
+    file.file.seek(0)
+
+    if file_size > MAX_FILE_SIZE:
+        raise HTTPException(status_code=413, detail="File too large. Maximum size is 10MB.")
+
     result = await ingestion_service.ingest_file(
         file.file, file.filename, workspace_id, content_type=file.content_type
     )
