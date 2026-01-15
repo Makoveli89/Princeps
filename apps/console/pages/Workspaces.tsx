@@ -62,8 +62,17 @@ export const Workspaces = ({ workspaces, activeId, onChange }: { workspaces: Wor
         {workspaces.map(ws => (
             <div
                 key={ws.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={ws.id === activeId}
                 onClick={() => onChange(ws.id)}
-                className={`p-6 border relative group cursor-pointer transition-all duration-300
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onChange(ws.id);
+                  }
+                }}
+                className={`p-6 border relative group cursor-pointer transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-500
                     ${ws.id === activeId
                         ? 'bg-cyan-950/10 border-cyan-500/50 shadow-[0_0_10px_rgba(0,243,255,0.1)]'
                         : 'bg-[#050505] border-gray-800 hover:border-gray-600'
