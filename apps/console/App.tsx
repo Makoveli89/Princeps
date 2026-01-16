@@ -11,13 +11,17 @@ import { KnowledgeSearch } from './pages/KnowledgeSearch';
 import { ReportsAndGym } from './pages/ReportsAndGym';
 import { SystemHealth } from './pages/SystemHealth';
 import { Chatbot } from './pages/Chatbot';
-import { ThemeProvider } from "./components/theme-provider"
+import { ThemeProvider } from './components/theme-provider';
 import { INITIAL_WORKSPACES } from './constants';
 import { Workspace } from './types';
 import { fetcher } from './lib/fetcher';
 
 const App = () => {
-  const { data: workspacesData, error, isLoading } = useSWR<Workspace[]>('/api/workspaces', fetcher);
+  const {
+    data: workspacesData,
+    error,
+    isLoading,
+  } = useSWR<Workspace[]>('/api/workspaces', fetcher);
   const [activeWorkspaceId, setActiveWorkspaceId] = useState<string | null>(null);
 
   const workspaces = workspacesData || INITIAL_WORKSPACES;
@@ -28,30 +32,46 @@ const App = () => {
     }
   }, [workspaces, activeWorkspaceId]);
 
-  const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];
+  const activeWorkspace = workspaces.find((w) => w.id === activeWorkspaceId) || workspaces[0];
 
   if (isLoading) {
-     return <div className="min-h-screen bg-[#050505] flex items-center justify-center text-gray-500 font-mono">INITIALIZING SYSTEM...</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center bg-[#050505] font-mono text-gray-500">
+        INITIALIZING SYSTEM...
+      </div>
+    );
   }
 
   // Handling case where no workspace exists yet
   if (!activeWorkspace && !isLoading && workspaces.length === 0) {
-      // Create default if none? Or show empty state?
-      // For now let's redirect to workspace creation or show a simplified layout
-      // Or just render Workspaces page forced
-      return (
-        <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange storageKey="vite-ui-theme">
-          <HashRouter>
-              <div className="min-h-screen bg-[#050505] text-white p-10">
-                  <Workspaces workspaces={[]} activeId={null} onChange={() => {}} />
-              </div>
-          </HashRouter>
-        </ThemeProvider>
-      )
+    // Create default if none? Or show empty state?
+    // For now let's redirect to workspace creation or show a simplified layout
+    // Or just render Workspaces page forced
+    return (
+      <ThemeProvider
+        attribute="class"
+        defaultTheme="dark"
+        enableSystem
+        disableTransitionOnChange
+        storageKey="vite-ui-theme"
+      >
+        <HashRouter>
+          <div className="min-h-screen bg-[#050505] p-10 text-white">
+            <Workspaces workspaces={[]} activeId={null} onChange={() => {}} />
+          </div>
+        </HashRouter>
+      </ThemeProvider>
+    );
   }
 
   return (
-    <ThemeProvider attribute="class" defaultTheme="dark" enableSystem disableTransitionOnChange storageKey="vite-ui-theme">
+    <ThemeProvider
+      attribute="class"
+      defaultTheme="dark"
+      enableSystem
+      disableTransitionOnChange
+      storageKey="vite-ui-theme"
+    >
       <HashRouter>
         <Layout
           workspaces={workspaces}
@@ -66,9 +86,25 @@ const App = () => {
             <Route path="/search" element={<KnowledgeSearch workspace={activeWorkspace} />} />
             <Route path="/logs" element={<RunsAndLogs workspace={activeWorkspace} />} />
             <Route path="/gym" element={<ReportsAndGym workspace={activeWorkspace} />} />
-            <Route path="/workspaces" element={<Workspaces workspaces={workspaces} activeId={activeWorkspaceId} onChange={setActiveWorkspaceId} />} />
+            <Route
+              path="/workspaces"
+              element={
+                <Workspaces
+                  workspaces={workspaces}
+                  activeId={activeWorkspaceId}
+                  onChange={setActiveWorkspaceId}
+                />
+              }
+            />
             <Route path="/settings" element={<SystemHealth workspace={activeWorkspace} />} />
-            <Route path="*" element={<div className="p-10 text-gray-500 font-mono text-center">404 - SECTOR NOT FOUND</div>} />
+            <Route
+              path="*"
+              element={
+                <div className="p-10 text-center font-mono text-gray-500">
+                  404 - SECTOR NOT FOUND
+                </div>
+              }
+            />
           </Routes>
         </Layout>
       </HashRouter>
