@@ -1,13 +1,16 @@
-<!DOCTYPE html>
+<!doctype html>
 <html lang="en">
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Princeps Console</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="preconnect" href="https://fonts.googleapis.com">
-    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-    <link href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap" rel="stylesheet">
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link
+      href="https://fonts.googleapis.com/css2?family=Cinzel:wght@400;700&family=Share+Tech+Mono&family=Rajdhani:wght@400;600;700&display=swap"
+      rel="stylesheet"
+    />
     <style>
       body {
         font-family: 'Rajdhani', sans-serif;
@@ -15,7 +18,10 @@
         color: #e5e7eb;
         overflow: hidden; /* Prevent body scroll, handle in layout */
       }
-      h1, h2, h3, .gothic-font {
+      h1,
+      h2,
+      h3,
+      .gothic-font {
         font-family: 'Cinzel', serif;
       }
       .mono-font {
@@ -51,10 +57,10 @@
       .scanlines {
         background: linear-gradient(
           to bottom,
-          rgba(255,255,255,0),
-          rgba(255,255,255,0) 50%,
-          rgba(0,0,0,0.2) 50%,
-          rgba(0,0,0,0.2)
+          rgba(255, 255, 255, 0),
+          rgba(255, 255, 255, 0) 50%,
+          rgba(0, 0, 0, 0.2) 50%,
+          rgba(0, 0, 0, 0.2)
         );
         background-size: 100% 4px;
         position: fixed;
@@ -68,14 +74,30 @@
       }
 
       @keyframes flicker {
-        0% { opacity: 0.97; }
-        5% { opacity: 0.95; }
-        10% { opacity: 0.9; }
-        15% { opacity: 0.95; }
-        20% { opacity: 0.99; }
-        50% { opacity: 0.95; }
-        80% { opacity: 0.9; }
-        100% { opacity: 0.97; }
+        0% {
+          opacity: 0.97;
+        }
+        5% {
+          opacity: 0.95;
+        }
+        10% {
+          opacity: 0.9;
+        }
+        15% {
+          opacity: 0.95;
+        }
+        20% {
+          opacity: 0.99;
+        }
+        50% {
+          opacity: 0.95;
+        }
+        80% {
+          opacity: 0.9;
+        }
+        100% {
+          opacity: 0.97;
+        }
       }
 
       .crt-flicker {
@@ -101,25 +123,25 @@
         box-shadow: 0 0 15px rgba(255, 0, 60, 0.15);
       }
     </style>
-  <script type="importmap">
-{
-  "imports": {
-    "react": "https://esm.sh/react@^19.2.3",
-    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
-    "react/": "https://esm.sh/react@^19.2.3/",
-    "react-router-dom": "https://esm.sh/react-router-dom@^7.11.0",
-    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
-    "recharts": "https://esm.sh/recharts@^3.6.0",
-    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
-    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
-    "vite": "https://esm.sh/vite@^7.3.0"
-  }
-}
-</script>
-<link rel="stylesheet" href="/index.css">
-</head>
+    <script type="importmap">
+      {
+        "imports": {
+          "react": "https://esm.sh/react@^19.2.3",
+          "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+          "react/": "https://esm.sh/react@^19.2.3/",
+          "react-router-dom": "https://esm.sh/react-router-dom@^7.11.0",
+          "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+          "recharts": "https://esm.sh/recharts@^3.6.0",
+          "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+          "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2",
+          "vite": "https://esm.sh/vite@^7.3.0"
+        }
+      }
+    </script>
+    <link rel="stylesheet" href="/index.css" />
+  </head>
   <body>
     <div id="root"></div>
-  <script type="module" src="/index.tsx"></script>
-</body>
+    <script type="module" src="/index.tsx"></script>
+  </body>
 </html>
