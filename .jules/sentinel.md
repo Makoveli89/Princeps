@@ -3,7 +3,7 @@
 **Learning:** Even internal-facing tools (like a console backend) can leak sensitive info if error handling is naive. The assumption that "errors are just strings" is dangerous when exceptions come from lower-level libraries (DB, OS).
 **Prevention:** Always mask internal errors in production APIs. Log the full error with a unique ID, and return only that ID to the client. Never pass `str(e)` directly to `detail=` or response body.
 
-## 2025-01-14 - Broken Generator Dependencies on Validation Error
-**Vulnerability:** When introducing strict Pydantic validation, the `get_db` dependency crashed with `RuntimeError: generator didn't stop after throw()` instead of returning 422. This masked the validation error with a 500 Internal Server Error.
-**Learning:** FastAPI injects exceptions (like validation errors) into dependency generators to trigger cleanup. If the generator catches this exception and tries to `yield` a fallback value (thinking it's a setup error), it violates the generator protocol (yielding twice).
-**Prevention:** Structure dependencies to distinguish between "setup" (before yield) and "usage" (yield). Only yield fallback values if setup fails. If usage fails, cleanup and exit without yielding.
+## 2026-01-14 - Unbounded Input in API Requests
+**Vulnerability:** Core API endpoints (`/api/workspaces`, `/api/run`, etc.) lacked length constraints on string fields. Specifically, `CreateWorkspaceRequest` allowed arbitrarily long names, and `ingest_document` had no file size limit.
+**Learning:** Pydantic models default to allowing any string length unless explicitly constrained. This creates trivial Denial of Service (DoS) vectors where a single request can exhaust memory or database storage limits.
+**Prevention:** Use `pydantic.Field(..., max_length=N)` for all string inputs exposed to the API. Enforce file size limits at the application level (middleware or endpoint) in addition to any reverse proxy limits.
