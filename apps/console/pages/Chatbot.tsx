@@ -3,6 +3,7 @@ import { GoogleGenAI } from '@google/genai';
 import { Send, Bot, Sparkles, Globe, Terminal, Loader2 } from 'lucide-react';
 import { Workspace, Message } from '../types';
 import { ChatMessage } from '../components/ChatMessage';
+import { ChatInput } from '../components/ChatInput';
 
 export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
   const [messages, setMessages] = useState<Message[]>([
