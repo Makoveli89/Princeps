@@ -118,7 +118,7 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
                 <button
                     onClick={() => setUseWebSearch(!useWebSearch)}
                     aria-pressed={useWebSearch}
-                    aria-label={useWebSearch ? 'Disable Netrunner Mode' : 'Enable Netrunner Mode'}
+                    title={useWebSearch ? 'Disable Netrunner Mode' : 'Enable Netrunner Mode'}
                     className={`flex items-center gap-3 px-4 py-2 border transition-all duration-300 ${
                         useWebSearch
                         ? 'bg-cyan-950/30 border-cyan-500 text-cyan-400 shadow-[0_0_15px_rgba(0,243,255,0.2)]'
