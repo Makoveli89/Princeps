@@ -1069,7 +1069,7 @@ class SQLiteVectorIndex(VectorIndex):
                 if isinstance(embedding_json, str):
                     try:
                         embedding = json.loads(embedding_json)
-                    except:
+                    except Exception:
                         continue
                 elif isinstance(embedding_json, list):
                     embedding = embedding_json
@@ -1083,7 +1083,7 @@ class SQLiteVectorIndex(VectorIndex):
                 if isinstance(metadata, str):
                     try:
                         metadata = json.loads(metadata)
-                    except:
+                    except Exception:
                         metadata = {}
                 elif metadata is None:
                     metadata = {}

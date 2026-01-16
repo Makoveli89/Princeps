@@ -1,5 +1,13 @@
 import React, { useState } from 'react';
-import { Upload, GitBranch, FileText, CheckCircle2, AlertCircle, HardDrive, Loader2 } from 'lucide-react';
+import {
+  Upload,
+  GitBranch,
+  FileText,
+  CheckCircle2,
+  AlertCircle,
+  HardDrive,
+  Loader2,
+} from 'lucide-react';
 import { Workspace } from '../types';
 
 export const IngestData = ({ workspace }: { workspace: Workspace }) => {
@@ -10,127 +18,146 @@ export const IngestData = ({ workspace }: { workspace: Workspace }) => {
   const [ingestStats, setIngestStats] = useState<any>(null);
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-      if (!e.target.files || e.target.files.length === 0) return;
+    if (!e.target.files || e.target.files.length === 0) return;
 
-      const file = e.target.files[0];
-      setIsUploading(true);
-      setError(null);
+    const file = e.target.files[0];
+    setIsUploading(true);
+    setError(null);
 
-      const formData = new FormData();
-      formData.append('file', file);
-      formData.append('workspace_id', workspace.id);
+    const formData = new FormData();
+    formData.append('file', file);
+    formData.append('workspace_id', workspace.id);
 
-      try {
-          const res = await fetch('/api/ingest', {
-              method: 'POST',
-              body: formData
-          });
+    try {
+      const res = await fetch('/api/ingest', {
+        method: 'POST',
+        body: formData,
+      });
 
-          if (res.ok) {
-              const data = await res.json();
-              if (data.status === 'success' || data.status === 'skipped') {
-                  setIngestStats(data);
-                  setSuccess(true);
-                  setTimeout(() => setSuccess(false), 5000);
-              } else {
-                  setError("Ingestion reported failure: " + JSON.stringify(data));
-              }
-          } else {
-              setError(`Upload failed: ${res.statusText}`);
-          }
-      } catch (err) {
-          setError(`Error: ${err}`);
-      } finally {
-          setIsUploading(false);
+      if (res.ok) {
+        const data = await res.json();
+        if (data.status === 'success' || data.status === 'skipped') {
+          setIngestStats(data);
+          setSuccess(true);
+          setTimeout(() => setSuccess(false), 5000);
+        } else {
+          setError('Ingestion reported failure: ' + JSON.stringify(data));
+        }
+      } else {
+        setError(`Upload failed: ${res.statusText}`);
       }
+    } catch (err) {
+      setError(`Error: ${err}`);
+    } finally {
+      setIsUploading(false);
+    }
   };
 
   return (
-    <div className="max-w-4xl mx-auto animate-in fade-in slide-in-from-bottom-4 duration-700">
+    <div className="animate-in fade-in slide-in-from-bottom-4 mx-auto max-w-4xl duration-700">
       <div className="mb-10 text-center">
-        <h2 className="text-3xl text-gray-100 gothic-font tracking-wide mb-2 text-glow">Knowledge Assimilation</h2>
-        <p className="text-gray-500 mono-font text-sm">Target Workspace: <span className="text-cyan-400 drop-shadow-[0_0_5px_rgba(0,243,255,0.4)]">{workspace?.name}</span></p>
+        <h2 className="gothic-font text-glow mb-2 text-3xl tracking-wide text-gray-100">
+          Knowledge Assimilation
+        </h2>
+        <p className="mono-font text-sm text-gray-500">
+          Target Workspace:{' '}
+          <span className="text-cyan-400 drop-shadow-[0_0_5px_rgba(0,243,255,0.4)]">
+            {workspace?.name}
+          </span>
+        </p>
       </div>
 
-      <div className="flex justify-center mb-10">
-        <div className="bg-[#050505] border border-gray-800 p-1 flex rounded-sm shadow-lg">
-            <button
-                onClick={() => setActiveTab('upload')}
-                className={`px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-3 transition-all ${activeTab === 'upload' ? 'bg-cyan-950/20 text-cyan-400 border border-cyan-900/50 shadow-[0_0_15px_rgba(0,243,255,0.1)]' : 'text-gray-600 hover:text-gray-400 border border-transparent'}`}
-            >
-                <FileText size={14} /> Sacred Texts (Docs)
-            </button>
-            <button
-                disabled
-                onClick={() => setActiveTab('repo')}
-                className={`opacity-50 cursor-not-allowed px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] flex items-center gap-3 transition-all ${activeTab === 'repo' ? 'bg-cyan-950/20 text-cyan-400 border border-cyan-900/50 shadow-[0_0_15px_rgba(0,243,255,0.1)]' : 'text-gray-600 hover:text-gray-400 border border-transparent'}`}
-            >
-                <GitBranch size={14} /> Cognitive Patterns (Repo)
-            </button>
+      <div className="mb-10 flex justify-center">
+        <div className="flex rounded-sm border border-gray-800 bg-[#050505] p-1 shadow-lg">
+          <button
+            onClick={() => setActiveTab('upload')}
+            className={`flex items-center gap-3 px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] transition-all ${activeTab === 'upload' ? 'border border-cyan-900/50 bg-cyan-950/20 text-cyan-400 shadow-[0_0_15px_rgba(0,243,255,0.1)]' : 'border border-transparent text-gray-600 hover:text-gray-400'}`}
+          >
+            <FileText size={14} /> Sacred Texts (Docs)
+          </button>
+          <button
+            disabled
+            onClick={() => setActiveTab('repo')}
+            className={`flex cursor-not-allowed items-center gap-3 px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] opacity-50 transition-all ${activeTab === 'repo' ? 'border border-cyan-900/50 bg-cyan-950/20 text-cyan-400 shadow-[0_0_15px_rgba(0,243,255,0.1)]' : 'border border-transparent text-gray-600 hover:text-gray-400'}`}
+          >
+            <GitBranch size={14} /> Cognitive Patterns (Repo)
+          </button>
         </div>
       </div>
 
-      <div className="bg-[#030303] border border-gray-800 p-16 relative overflow-hidden group shadow-2xl hover:border-gray-700 transition-colors duration-500">
-         {/* Tech Background Lines */}
-         <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-900/20 to-transparent"></div>
-         <div className="absolute bottom-0 left-0 w-full h-1 bg-gradient-to-r from-transparent via-cyan-900/20 to-transparent"></div>
+      <div className="group relative overflow-hidden border border-gray-800 bg-[#030303] p-16 shadow-2xl transition-colors duration-500 hover:border-gray-700">
+        {/* Tech Background Lines */}
+        <div className="absolute left-0 top-0 h-1 w-full bg-gradient-to-r from-transparent via-cyan-900/20 to-transparent"></div>
+        <div className="absolute bottom-0 left-0 h-1 w-full bg-gradient-to-r from-transparent via-cyan-900/20 to-transparent"></div>
 
-         {activeTab === 'upload' ? (
-             <div
-                className="flex flex-col items-center justify-center border-2 border-dashed border-gray-800 hover:border-cyan-500/50 transition-all duration-500 rounded-sm p-12 bg-[#050505] group/drop relative overflow-hidden cursor-pointer"
-             >
-                 {isUploading && (
-                     <div className="absolute inset-0 bg-black/80 z-20 flex flex-col items-center justify-center">
-                         <Loader2 className="animate-spin text-cyan-500 mb-4" size={48} />
-                         <span className="text-cyan-400 mono-font text-xs tracking-widest animate-pulse">ASSIMILATING KNOWLEDGE...</span>
-                     </div>
-                 )}
+        {activeTab === 'upload' ? (
+          <div className="group/drop relative flex cursor-pointer flex-col items-center justify-center overflow-hidden rounded-sm border-2 border-dashed border-gray-800 bg-[#050505] p-12 transition-all duration-500 hover:border-cyan-500/50">
+            {isUploading && (
+              <div className="absolute inset-0 z-20 flex flex-col items-center justify-center bg-black/80">
+                <Loader2 className="mb-4 animate-spin text-cyan-500" size={48} />
+                <span className="mono-font animate-pulse text-xs tracking-widest text-cyan-400">
+                  ASSIMILATING KNOWLEDGE...
+                </span>
+              </div>
+            )}
 
-                 <div className="absolute inset-0 bg-cyan-950/5 opacity-0 group-hover/drop:opacity-100 transition-opacity duration-500"></div>
-                 <Upload size={48} className="text-gray-700 mb-6 group-hover/drop:text-cyan-400 group-hover/drop:scale-110 transition-all duration-500 drop-shadow-[0_0_10px_rgba(0,243,255,0.2)] relative z-10" />
-                 <h3 className="text-gray-300 font-mono text-lg relative z-10 tracking-wide">Upload Documents</h3>
-                 <p className="text-gray-600 text-xs mt-2 mb-8 text-center max-w-sm relative z-10 font-mono">
-                    Drag and drop PDF, TXT, MD, PY, JSON files here to embed them into the active workspace's vector index.
-                 </p>
-                 <input
-                    type="file"
-                    className="hidden"
-                    id="file-upload"
-                    onChange={handleFileUpload}
-                 />
-                 <label
-                    htmlFor="file-upload"
-                    className="relative z-10 cursor-pointer bg-gray-900 hover:bg-cyan-950 hover:text-cyan-400 hover:border-cyan-500/50 text-gray-400 px-8 py-3 border border-gray-700 text-[10px] font-bold uppercase tracking-[0.2em] transition-all shadow-lg"
-                 >
-                    Select Files
-                 </label>
-             </div>
-         ) : (
-            // Repo tab disabled for now
-             <div className="text-center text-gray-500 font-mono text-xs">Repository ingestion module offline.</div>
-         )}
+            <div className="absolute inset-0 bg-cyan-950/5 opacity-0 transition-opacity duration-500 group-hover/drop:opacity-100"></div>
+            <Upload
+              size={48}
+              className="relative z-10 mb-6 text-gray-700 drop-shadow-[0_0_10px_rgba(0,243,255,0.2)] transition-all duration-500 group-hover/drop:scale-110 group-hover/drop:text-cyan-400"
+            />
+            <h3 className="relative z-10 font-mono text-lg tracking-wide text-gray-300">
+              Upload Documents
+            </h3>
+            <p className="relative z-10 mb-8 mt-2 max-w-sm text-center font-mono text-xs text-gray-600">
+              Drag and drop PDF, TXT, MD, PY, JSON files here to embed them into the active
+              workspace's vector index.
+            </p>
+            <input type="file" className="hidden" id="file-upload" onChange={handleFileUpload} />
+            <label
+              htmlFor="file-upload"
+              className="relative z-10 cursor-pointer border border-gray-700 bg-gray-900 px-8 py-3 text-[10px] font-bold uppercase tracking-[0.2em] text-gray-400 shadow-lg transition-all hover:border-cyan-500/50 hover:bg-cyan-950 hover:text-cyan-400"
+            >
+              Select Files
+            </label>
+          </div>
+        ) : (
+          // Repo tab disabled for now
+          <div className="text-center font-mono text-xs text-gray-500">
+            Repository ingestion module offline.
+          </div>
+        )}
 
-         {/* Status Overlay */}
-         {success && (
-            <div className="absolute inset-0 bg-[#020202]/95 backdrop-blur-sm flex flex-col items-center justify-center z-20 animate-in fade-in zoom-in-95 duration-300">
-                <div className="relative">
-                    <div className="absolute inset-0 bg-emerald-500 blur-[40px] opacity-20 rounded-full animate-pulse"></div>
-                    <CheckCircle2 size={64} className="text-emerald-500 mb-6 relative z-10 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]" />
-                </div>
-                <h3 className="text-emerald-100 gothic-font text-2xl tracking-widest text-glow">Ingestion Complete</h3>
-                <p className="text-emerald-600/80 mono-font text-xs mt-3 uppercase tracking-wider">
-                    {ingestStats?.status === 'skipped' ? 'Document already exists.' : `Added ${ingestStats?.chunks || 0} chunks to vector index.`}
-                </p>
+        {/* Status Overlay */}
+        {success && (
+          <div className="animate-in fade-in zoom-in-95 absolute inset-0 z-20 flex flex-col items-center justify-center bg-[#020202]/95 backdrop-blur-sm duration-300">
+            <div className="relative">
+              <div className="absolute inset-0 animate-pulse rounded-full bg-emerald-500 opacity-20 blur-[40px]"></div>
+              <CheckCircle2
+                size={64}
+                className="relative z-10 mb-6 text-emerald-500 drop-shadow-[0_0_15px_rgba(16,185,129,0.5)]"
+              />
             </div>
-         )}
+            <h3 className="gothic-font text-glow text-2xl tracking-widest text-emerald-100">
+              Ingestion Complete
+            </h3>
+            <p className="mono-font mt-3 text-xs uppercase tracking-wider text-emerald-600/80">
+              {ingestStats?.status === 'skipped'
+                ? 'Document already exists.'
+                : `Added ${ingestStats?.chunks || 0} chunks to vector index.`}
+            </p>
+          </div>
+        )}
 
-         {error && (
-             <div className="absolute bottom-4 left-4 right-4 bg-red-900/20 border border-red-800 text-red-400 p-4 text-xs mono-font flex items-center gap-3">
-                 <AlertCircle size={16} />
-                 {error}
-                 <button onClick={() => setError(null)} className="ml-auto hover:text-white">DISMISS</button>
-             </div>
-         )}
+        {error && (
+          <div className="mono-font absolute bottom-4 left-4 right-4 flex items-center gap-3 border border-red-800 bg-red-900/20 p-4 text-xs text-red-400">
+            <AlertCircle size={16} />
+            {error}
+            <button onClick={() => setError(null)} className="ml-auto hover:text-white">
+              DISMISS
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );
