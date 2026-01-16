@@ -16,13 +16,13 @@ export enum AgentType {
   RETRIEVER = 'RetrieverAgent',
   CRITIC = 'CriticAgent',
   SCRIBE = 'Scribe', // Added based on backend
-  TRANSIENT = 'TransientScribe'
+  TRANSIENT = 'TransientScribe',
 }
 
 export enum RunStatus {
   SUCCESS = 'SUCCESS',
   FAILURE = 'FAILURE',
-  RUNNING = 'RUNNING'
+  RUNNING = 'RUNNING',
 }
 
 export interface AgentRun {

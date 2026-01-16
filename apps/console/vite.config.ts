@@ -6,7 +6,7 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: {
-      "@": path.resolve(__dirname, "./"),
+      '@': path.resolve(__dirname, './'),
     },
   },
   server: {
@@ -16,7 +16,7 @@ export default defineConfig({
         target: 'http://localhost:8000',
         changeOrigin: true,
         // rewrite: (path) => path.replace(/^\/api/, '') // Removing rewrite to match backend routes
-      }
-    }
-  }
+      },
+    },
+  },
 });
