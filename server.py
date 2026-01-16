@@ -202,15 +202,8 @@ class WorkspaceDTO(BaseModel):
 
 
 class CreateWorkspaceRequest(BaseModel):
-    name: str = Field(
-        ...,
-        max_length=50,
-        pattern=r"^[a-zA-Z0-9 _-]+$",
-        description="Workspace name (max 50 chars, alphanumeric, spaces, dashes, underscores)",
-    )
-    description: str = Field(
-        ..., max_length=200, description="Workspace description (max 200 chars)"
-    )
+    name: str = Field(..., min_length=1, max_length=50, pattern="^[a-zA-Z0-9 _-]+$")
+    description: str = Field(..., max_length=200)
 
 
 class AgentDTO(BaseModel):
