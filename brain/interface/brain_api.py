@@ -245,7 +245,9 @@ def create_app():
             raise
         except Exception:
             logger.exception("Error distilling document %s", document_id)
-            raise HTTPException(status_code=500, detail="Internal server error during document distillation")
+            raise HTTPException(
+                status_code=500, detail="Internal server error during document distillation"
+            )
 
     @app.post("/api/v1/query")
     def query(request: QueryRequest):

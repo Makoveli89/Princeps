@@ -533,14 +533,18 @@ class DistillationService:
 
                 except Exception as e:
                     # Log detailed error internally but avoid exposing specifics via result.errors
-                    logger.exception("Error during document distillation for document_id=%s", document_id)
+                    logger.exception(
+                        "Error during document distillation for document_id=%s", document_id
+                    )
                     result.errors.append("Internal error during document distillation")
                     mark_operation_failed(session, operation.id, str(e), traceback.format_exc())
                     session.rollback()
 
-        except Exception as e:
+        except Exception:
             # Log outer failure details; return a generic error message to callers
-            logger.exception("Unexpected failure in distill_document for document_id=%s", document_id)
+            logger.exception(
+                "Unexpected failure in distill_document for document_id=%s", document_id
+            )
             result.errors.append("Distillation failed due to an internal error")
 
         finally:
