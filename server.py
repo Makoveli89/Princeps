@@ -106,8 +106,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"database_initialization_failed: {e}")
 
+    # Initialize Vector Index based on Environment
+    db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
+
+    # Store in app.state for reuse (connection pooling)
+    if db_url.startswith("sqlite"):
+        app.state.vector_index = create_sqlite_index(
+            connection_string=db_url, table_name="doc_chunks"
+        )
+    else:
+        app.state.vector_index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
+
+    logger.info("vector_index_initialized", type=type(app.state.vector_index).__name__)
+
     yield
-    # Cleanup if needed
+
+    # Cleanup
+    if hasattr(app.state, "vector_index"):
+        await app.state.vector_index.close()
+        logger.info("vector_index_closed")
 
 
 app = FastAPI(title="Princeps Console Backend", version="0.1.0", lifespan=lifespan)
@@ -522,15 +539,9 @@ async def search_knowledge(
     emb_service = get_embedding_service()
     query_vector = await emb_service.embed_text(q)
 
-    # Initialize Vector Index based on Environment
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
-
-    if db_url.startswith("sqlite"):
-        index = create_sqlite_index(connection_string=db_url, table_name="doc_chunks")
-    else:
-        index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
-
     # Search
+    index = request.app.state.vector_index
+
     # Filter by tenant
     from framework.retrieval.vector_search import SearchFilter
 
