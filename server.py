@@ -22,7 +22,7 @@ from fastapi import (
 )
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
-from pydantic import BaseModel
+from pydantic import BaseModel, Field
 from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
@@ -65,7 +65,13 @@ from brain.core.models import (
     KnowledgeNode,
     Tenant,
 )
+from framework.agents.concept_agent import ConceptAgent
+from framework.agents.entity_agent import EntityExtractionAgent
 from framework.agents.example_agent import SummarizationAgent
+from framework.agents.executor_agent import ExecutorAgent
+from framework.agents.planner_agent import PlannerAgent
+from framework.agents.retriever_agent import RetrieverAgent
+from framework.agents.topic_agent import TopicAgent
 
 # New Services
 from framework.ingestion.service import IngestionService
@@ -100,8 +106,25 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"database_initialization_failed: {e}")
 
+    # Initialize Vector Index based on Environment
+    db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
+
+    # Store in app.state for reuse (connection pooling)
+    if db_url.startswith("sqlite"):
+        app.state.vector_index = create_sqlite_index(
+            connection_string=db_url, table_name="doc_chunks"
+        )
+    else:
+        app.state.vector_index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
+
+    logger.info("vector_index_initialized", type=type(app.state.vector_index).__name__)
+
     yield
-    # Cleanup if needed
+
+    # Cleanup
+    if hasattr(app.state, "vector_index"):
+        await app.state.vector_index.close()
+        logger.info("vector_index_closed")
 
 
 app = FastAPI(title="Princeps Console Backend", version="0.1.0", lifespan=lifespan)
@@ -179,8 +202,15 @@ class WorkspaceDTO(BaseModel):
 
 
 class CreateWorkspaceRequest(BaseModel):
-    name: str
-    description: str
+    name: str = Field(
+        ...,
+        max_length=50,
+        pattern=r"^[a-zA-Z0-9 _-]+$",
+        description="Workspace name (max 50 chars, alphanumeric, spaces, dashes, underscores)",
+    )
+    description: str = Field(
+        ..., max_length=200, description="Workspace description (max 200 chars)"
+    )
 
 
 class AgentDTO(BaseModel):
@@ -193,7 +223,7 @@ class AgentDTO(BaseModel):
 
 class RunRequest(BaseModel):
     agentId: str  # For now this maps to a hardcoded agent type or ID
-    input: str
+    input: str = Field(..., max_length=100000)
     workspaceId: str
 
 
@@ -250,15 +280,25 @@ def get_db():
 # In a real app, this would be a sophisticated service managing running instances.
 class AgentManager:
     def __init__(self):
-        # We'll just instantiate a few agents for listing purposes
-        self.available_agents = [
-            SummarizationAgent(agent_name="Scribe", agent_type="summarization"),
-            # We could add more here
-        ]
-        # And a mock client for now since we don't have keys in env usually
-        # But for "Real Data", we should try to use the real client if keys exist.
         self.llm_client = MultiLLMClient()
         self.skill_resolver = SkillResolver(llm_client=self.llm_client)
+
+        # Instantiate agents
+        self.available_agents = [
+            SummarizationAgent(
+                agent_name="Scribe", agent_type="summarization", llm_client=self.llm_client
+            ),
+            PlannerAgent(agent_name="Strategist", agent_type="planner", llm_client=self.llm_client),
+            ExecutorAgent(agent_name="Operator", agent_type="executor", llm_client=self.llm_client),
+            RetrieverAgent(
+                agent_name="Archivist", agent_type="retriever", llm_client=self.llm_client
+            ),
+            EntityExtractionAgent(
+                agent_name="Profiler", agent_type="entity_extraction", llm_client=self.llm_client
+            ),
+            TopicAgent(agent_name="Analyst", agent_type="topic", llm_client=self.llm_client),
+            ConceptAgent(agent_name="Architect", agent_type="concept", llm_client=self.llm_client),
+        ]
 
     def get_agents(self) -> list[AgentDTO]:
         return [
@@ -267,21 +307,31 @@ class AgentManager:
                 name=a.agent_name,
                 role=a.agent_type.capitalize(),
                 status="idle",
-                capabilities=a.get_capabilities()["capabilities"],
+                capabilities=a.get_capabilities().get("capabilities", []),
             )
             for a in self.available_agents
         ]
 
     async def run_agent(self, agent_id: str, prompt: str, workspace_id: str) -> dict[str, Any]:
         # Find agent by ID or Type
-        # Ideally we persist agents in DB, but for now we look up in our list
-        # or create a new transient one.
         agent_def = next((a for a in self.available_agents if a.agent_id == agent_id), None)
+
+        # Fallback to fuzzy match on type if ID match failed
+        if not agent_def:
+            agent_def = next(
+                (a for a in self.available_agents if a.agent_type.lower() in agent_id.lower()),
+                None,
+            )
+
         if not agent_def:
             # Fallback: create a new one based on ID assuming it is a type
-            agent_def = SummarizationAgent(agent_name="TransientScribe", agent_type="summarization")
+            agent_def = SummarizationAgent(
+                agent_name="TransientScribe",
+                agent_type="summarization",
+                llm_client=self.llm_client,
+            )
 
-        # Configure the agent with the real client
+        # Configure the agent with the real client (redundant if passed in init, but safe)
         agent_def.llm_client = self.llm_client
 
         task = agent_def.create_task(prompt=prompt, tenant_id=workspace_id)
@@ -496,15 +546,9 @@ async def search_knowledge(
     emb_service = get_embedding_service()
     query_vector = await emb_service.embed_text(q)
 
-    # Initialize Vector Index based on Environment
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
-
-    if db_url.startswith("sqlite"):
-        index = create_sqlite_index(connection_string=db_url, table_name="doc_chunks")
-    else:
-        index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
-
     # Search
+    index = request.app.state.vector_index
+
     # Filter by tenant
     from framework.retrieval.vector_search import SearchFilter
 
