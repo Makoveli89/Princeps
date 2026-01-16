@@ -1,5 +1,3 @@
-# Bolt's Journal
-
-## 2024-05-22 - Missing Connection Pooling in Vector Search
-**Learning:** The application was re-initializing the Vector Index (and underlying database connection pool) on every search request. This negates the benefits of connection pooling and adds significant overhead (connecting, authenticating) to every request.
-**Action:** Always ensure expensive resources like database connection pools are initialized once (e.g., in `lifespan` or as a singleton) and reused across requests.
+## 2024-05-23 - N+1 Query in `get_workspaces`
+**Learning:** The `get_workspaces` endpoint was suffering from a classic N+1 query problem, executing 3 additional queries (counts for documents, chunks, and runs) for every tenant retrieved. This scales linearly with the number of tenants, degrading performance.
+**Action:** Implemented scalar subqueries using SQLAlchemy's `func.count`, `.correlate()`, and `scalar_subquery()`. This allows fetching all necessary counts in the same main query as the tenants, reducing the operation to a single database round-trip regardless of the number of tenants. This pattern should be applied whenever aggregating related data for a list of items.
