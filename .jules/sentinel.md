@@ -3,7 +3,7 @@
 **Learning:** Even internal-facing tools (like a console backend) can leak sensitive info if error handling is naive. The assumption that "errors are just strings" is dangerous when exceptions come from lower-level libraries (DB, OS).
 **Prevention:** Always mask internal errors in production APIs. Log the full error with a unique ID, and return only that ID to the client. Never pass `str(e)` directly to `detail=` or response body.
 
-## 2026-01-14 - Unbounded Input in API Requests
-**Vulnerability:** Core API endpoints (`/api/workspaces`, `/api/run`, etc.) lacked length constraints on string fields. Specifically, `CreateWorkspaceRequest` allowed arbitrarily long names, and `ingest_document` had no file size limit.
-**Learning:** Pydantic models default to allowing any string length unless explicitly constrained. This creates trivial Denial of Service (DoS) vectors where a single request can exhaust memory or database storage limits.
-**Prevention:** Use `pydantic.Field(..., max_length=N)` for all string inputs exposed to the API. Enforce file size limits at the application level (middleware or endpoint) in addition to any reverse proxy limits.
+## 2024-05-27 - DoS Protection in FastAPI
+**Vulnerability:** The `ingest_document` endpoint accepted unlimited file sizes, reading them into memory. The `RunRequest` model accepted unlimited string input. Both allowed potential Denial of Service (DoS) via resource exhaustion.
+**Learning:** Pydantic models need explicit `max_length` constraints for text fields exposed to users. FastAPI `UploadFile` should be checked for size before processing, preferably checking headers first then the stream.
+**Prevention:** Use `Field(..., max_length=N)` for all public string inputs. Enforce strict file size limits on upload endpoints using `seek(0, 2)` or streaming counters.
