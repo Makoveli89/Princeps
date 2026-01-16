@@ -89,7 +89,7 @@ from framework.skills.resolver import SkillResolver
 
 # Initialize Logger
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)  # Don't overwrite structlog logger
 
 
 # Initialize Database on Startup
@@ -206,7 +206,7 @@ class WorkspaceDTO(BaseModel):
 
 
 class CreateWorkspaceRequest(BaseModel):
-    name: str = Field(..., max_length=50, pattern=r"^[a-zA-Z0-9_\-\s]+$")
+    name: str = Field(..., max_length=50)
     description: str = Field(..., max_length=200)
 
 
@@ -219,14 +219,14 @@ class AgentDTO(BaseModel):
 
 
 class RunRequest(BaseModel):
-    agentId: str  # For now this maps to a hardcoded agent type or ID
+    agentId: str = Field(..., max_length=100)  # For now this maps to a hardcoded agent type or ID
     input: str = Field(..., max_length=100000)
-    workspaceId: str
+    workspaceId: str = Field(..., max_length=100)
 
 
 class SkillRunRequest(BaseModel):
     query: str = Field(..., max_length=10000)
-    workspaceId: str
+    workspaceId: str = Field(..., max_length=100)
 
 
 class StatsDTO(BaseModel):
