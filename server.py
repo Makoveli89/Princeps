@@ -27,7 +27,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
-from sqlalchemy import desc, func
+from sqlalchemy import desc
 
 # --- Structlog Configuration ---
 
@@ -432,7 +432,7 @@ def get_workspaces(db=Depends(get_db)):
 
     # Optimize query to fetch tenants with counts in a single query
     # Using scalar_subquery to prevent N+1 problem
-    from sqlalchemy import func, select
+    from sqlalchemy import select
 
     doc_count_sub = (
         select(func.count(Document.id))
