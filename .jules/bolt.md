@@ -1,3 +1,7 @@
-## 2024-05-23 - Singleton Vector Index
-**Learning:** Initializing database adapters (like `PgVectorIndex` or `AsyncEngine`) inside request handlers creates a new connection pool for every request, leading to rapid resource exhaustion and high latency.
-**Action:** Always initialize heavy resources with connection pools in the application `lifespan` (or `on_event("startup")`) and store them in `app.state` for reuse across requests. Ensure `close()` is called on shutdown.
+# Bolt's Journal - Critical Learnings
+
+This journal tracks critical performance learnings, anti-patterns, and architectural constraints discovered by Bolt.
+
+## 2026-01-13 - [N+1 Query in Workspace Listing]
+**Learning:** The workspace listing endpoint (`/api/workspaces`) was performing 3 extra queries per workspace to fetch counts for documents, chunks, and runs.
+**Action:** Replaced loop-based counting with SQLAlchemy `scalar_subquery()` and `.correlate()` to fetch all data in a single optimized query.

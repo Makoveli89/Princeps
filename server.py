@@ -27,7 +27,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
-from sqlalchemy import desc, func
+from sqlalchemy import desc
 
 # --- Structlog Configuration ---
 
@@ -430,44 +430,47 @@ def get_workspaces(db=Depends(get_db)):
         # This behavior is debatable but keeps the UI working even if DB is problematic initially
         return []
 
-    # Optimize: Fetch all counts in a single query using scalar subqueries to avoid N+1 problem
-    # Instead of executing 3 additional queries per tenant, we execute 1 query total.
+    # Optimize query to fetch tenants with counts in a single query
+    # Using scalar_subquery to prevent N+1 problem
+    from sqlalchemy import select
 
     doc_count_sub = (
-        db.query(func.count(Document.id))
-        .filter(Document.tenant_id == Tenant.id)
+        select(func.count(Document.id))
+        .where(Document.tenant_id == Tenant.id)
         .correlate(Tenant)
         .scalar_subquery()
     )
 
     chunk_count_sub = (
-        db.query(func.count(DocChunk.id))
-        .filter(DocChunk.tenant_id == Tenant.id)
+        select(func.count(DocChunk.id))
+        .where(DocChunk.tenant_id == Tenant.id)
         .correlate(Tenant)
         .scalar_subquery()
     )
 
     run_count_sub = (
-        db.query(func.count(AgentRun.id))
-        .filter(AgentRun.tenant_id == Tenant.id)
+        select(func.count(AgentRun.id))
+        .where(AgentRun.tenant_id == Tenant.id)
         .correlate(Tenant)
         .scalar_subquery()
     )
 
-    tenants_with_counts = (
-        db.query(
-            Tenant,
-            doc_count_sub.label("doc_count"),
-            chunk_count_sub.label("chunk_count"),
-            run_count_sub.label("run_count"),
-        )
-        .filter(Tenant.is_active == True)
-        .all()
-    )
+    stmt = select(
+        Tenant,
+        doc_count_sub.label("doc_count"),
+        chunk_count_sub.label("chunk_count"),
+        run_count_sub.label("run_count"),
+    ).where(Tenant.is_active == True)
+
+    rows = db.execute(stmt).all()
 
     result = []
-    for t, doc_c, chunk_c, run_c in tenants_with_counts:
-        agent_count = 0  # Still hardcoded as per original logic
+    for row in rows:
+        t = row[0]  # Tenant object
+        doc_count = row[1] or 0
+        chunk_count = row[2] or 0
+        run_count = row[3] or 0
+        agent_count = 0
 
         result.append(
             WorkspaceDTO(
