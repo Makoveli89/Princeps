@@ -1,7 +1,3 @@
-# Bolt's Journal - Critical Learnings
-
-This journal tracks critical performance learnings, anti-patterns, and architectural constraints discovered by Bolt.
-
-## 2026-01-13 - [N+1 Query in Workspace Listing]
-**Learning:** The workspace listing endpoint (`/api/workspaces`) was performing 3 extra queries per workspace to fetch counts for documents, chunks, and runs.
-**Action:** Replaced loop-based counting with SQLAlchemy `scalar_subquery()` and `.correlate()` to fetch all data in a single optimized query.
+## 2024-05-23 - Eliminating N+1 Queries in Workspace Listing
+**Learning:** Scalar subqueries in SQLAlchemy (`correlate().scalar_subquery()`) are an extremely effective way to aggregate counts from related tables in a single query, avoiding the Cartesian product issues of joins and the N+1 problem of loops.
+**Action:** Always look for loops over parent entities that query child counts and replace them with correlated subqueries.
