@@ -117,6 +117,8 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
                 {/* Mode Toggle */}
                 <button
                     onClick={() => setUseWebSearch(!useWebSearch)}
+                    aria-pressed={useWebSearch}
+                    aria-label={useWebSearch ? 'Disable Netrunner Mode' : 'Enable Netrunner Mode'}
                     className={`flex items-center gap-3 px-4 py-2 border transition-all duration-300 ${
                         useWebSearch
                         ? 'bg-cyan-950/30 border-cyan-500 text-cyan-400 shadow-[0_0_15px_rgba(0,243,255,0.2)]'
@@ -177,6 +179,7 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
                             onClick={handleSend}
                             disabled={!input.trim() || isThinking}
                             aria-label="Send message"
+                            title="Send message"
                             className="absolute right-2 top-2 p-2 bg-gray-900 border border-gray-700 text-cyan-500 hover:bg-cyan-950 hover:text-cyan-400 hover:border-cyan-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed group/btn"
                         >
                             <Send size={16} className="group-hover/btn:translate-x-0.5 transition-transform" />
