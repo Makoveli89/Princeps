@@ -68,22 +68,29 @@ export const Workspaces = ({
         </div>
       )}
 
-      <div className="grid grid-cols-1 gap-6 md:grid-cols-2 lg:grid-cols-3">
-        {workspaces.map((ws) => (
-          <div
-            key={ws.id}
-            onClick={() => onChange(ws.id)}
-            className={`group relative cursor-pointer border p-6 transition-all duration-300 ${
-              ws.id === activeId
-                ? 'border-cyan-500/50 bg-cyan-950/10 shadow-[0_0_10px_rgba(0,243,255,0.1)]'
-                : 'border-gray-800 bg-[#050505] hover:border-gray-600'
-            }`}
-          >
-            {ws.id === activeId && (
-              <div className="absolute right-2 top-2 rounded border border-cyan-800 bg-cyan-900/30 px-2 py-0.5 text-[10px] text-cyan-400">
-                ACTIVE
-              </div>
-            )}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+        {workspaces.map(ws => (
+            <div
+                key={ws.id}
+                role="button"
+                tabIndex={0}
+                aria-pressed={ws.id === activeId}
+                onClick={() => onChange(ws.id)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' || e.key === ' ') {
+                    e.preventDefault();
+                    onChange(ws.id);
+                  }
+                }}
+                className={`p-6 border relative group cursor-pointer transition-all duration-300 focus:outline-none focus:ring-2 focus:ring-cyan-500
+                    ${ws.id === activeId
+                        ? 'bg-cyan-950/10 border-cyan-500/50 shadow-[0_0_10px_rgba(0,243,255,0.1)]'
+                        : 'bg-[#050505] border-gray-800 hover:border-gray-600'
+                    }`}
+            >
+                {ws.id === activeId && (
+                    <div className="absolute top-2 right-2 text-[10px] bg-cyan-900/30 text-cyan-400 px-2 py-0.5 border border-cyan-800 rounded">ACTIVE</div>
+                )}
 
             <div className="mb-4 flex items-center gap-3">
               <div

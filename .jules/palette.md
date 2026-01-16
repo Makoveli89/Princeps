@@ -1,3 +1,3 @@
-## 2024-05-24 - Accessibility of Icon-Only Buttons
-**Learning:** The application uses icon-only buttons (like the Send button in Chatbot) which default to being inaccessible to screen readers.
-**Action:** Always check for `aria-label` or `title` on buttons that lack visible text content.
+## 2024-05-22 - Interactive Cards Pattern
+**Learning:** High-value interactive cards (like Workspaces) are implemented as `div`s with `onClick`, lacking keyboard accessibility.
+**Action:** When touching list/grid components, always check for `onClick` on non-button elements and upgrade them to `role="button"` with keyboard handlers.
