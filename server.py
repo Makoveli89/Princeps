@@ -89,7 +89,7 @@ from framework.skills.resolver import SkillResolver
 
 # Initialize Logger
 logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
+# logger = logging.getLogger(__name__)  # Don't overwrite structlog logger
 
 
 # Initialize Database on Startup
@@ -106,23 +106,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"database_initialization_failed: {e}")
 
-    # Initialize Vector Index based on Environment
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
-
-    # Store in app.state for reuse (connection pooling)
-    if db_url.startswith("sqlite"):
-        app.state.vector_index = create_sqlite_index(
-            connection_string=db_url, table_name="doc_chunks"
-        )
-    else:
-        app.state.vector_index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
-
-    logger.info("vector_index_initialized", type=type(app.state.vector_index).__name__)
+    # Initialize Vector Index Singleton
+    try:
+        db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
+        if db_url.startswith("sqlite"):
+            app.state.vector_index = create_sqlite_index(
+                connection_string=db_url, table_name="doc_chunks"
+            )
+        else:
+            app.state.vector_index = PgVectorIndex(
+                connection_string=db_url, table_name="doc_chunks"
+            )
+        logger.info("vector_index_initialized")
+    except Exception as e:
+        logger.error(f"vector_index_initialization_failed: {e}")
+        # Ensure we don't crash startup, but endpoint will need fallback
+        app.state.vector_index = None
 
     yield
 
     # Cleanup
-    if hasattr(app.state, "vector_index"):
+    if hasattr(app.state, "vector_index") and app.state.vector_index:
         await app.state.vector_index.close()
         logger.info("vector_index_closed")
 
@@ -202,7 +206,7 @@ class WorkspaceDTO(BaseModel):
 
 
 class CreateWorkspaceRequest(BaseModel):
-    name: str = Field(..., min_length=1, max_length=50, pattern="^[a-zA-Z0-9 _-]+$")
+    name: str = Field(..., max_length=50)
     description: str = Field(..., max_length=200)
 
 
@@ -215,14 +219,14 @@ class AgentDTO(BaseModel):
 
 
 class RunRequest(BaseModel):
-    agentId: str  # For now this maps to a hardcoded agent type or ID
+    agentId: str = Field(..., max_length=100)  # For now this maps to a hardcoded agent type or ID
     input: str = Field(..., max_length=100000)
-    workspaceId: str
+    workspaceId: str = Field(..., max_length=100)
 
 
 class SkillRunRequest(BaseModel):
-    query: str
-    workspaceId: str
+    query: str = Field(..., max_length=10000)
+    workspaceId: str = Field(..., max_length=100)
 
 
 class StatsDTO(BaseModel):
@@ -260,13 +264,29 @@ class RunLogDTO(BaseModel):
 
 # --- Helper: Dependency for DB Session ---
 def get_db():
+    # Attempt to initialize session
+    db_context = None
+    session = None
     try:
-        with get_session() as session:
-            yield session
+        db_context = get_session()
+        session = db_context.__enter__()
     except Exception as e:
-        # Yield None if DB is down, to allow fallback logic in endpoints
+        # Setup failed (DB down?)
         logger.error(f"db_connection_failed: {e}")
         yield None
+        return
+
+    # Yield session for usage
+    try:
+        yield session
+    except Exception:
+        # Endpoint failed - propagate to context manager (rollback)
+        if db_context and not db_context.__exit__(*sys.exc_info()):
+            raise
+    else:
+        # Success - commit
+        if db_context:
+            db_context.__exit__(None, None, None)
 
 
 # --- Helper: Fake Agent Manager ---
@@ -567,6 +587,17 @@ async def search_knowledge(
     # Get query embedding
     emb_service = get_embedding_service()
     query_vector = await emb_service.embed_text(q)
+
+    # Use Singleton Vector Index
+    index = getattr(app.state, "vector_index", None)
+    if not index:
+        # Fallback initialization if singleton missing (e.g., startup error)
+        logger.warning("vector_index_fallback_init")
+        db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
+        if db_url.startswith("sqlite"):
+            index = create_sqlite_index(connection_string=db_url, table_name="doc_chunks")
+        else:
+            index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
 
     # Search
     index = request.app.state.vector_index

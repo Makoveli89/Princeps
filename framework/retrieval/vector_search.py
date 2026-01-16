@@ -544,7 +544,7 @@ class VectorIndex(ABC):
 
     @abstractmethod
     async def close(self) -> None:
-        """Close any resources associated with the index."""
+        """Close connections and cleanup resources."""
         pass
 
 
@@ -676,8 +676,9 @@ class InMemoryVectorIndex(VectorIndex):
             self._vectors.clear()
 
     async def close(self) -> None:
-        """Close the index."""
-        await self.clear()
+        """Close connections and cleanup resources."""
+        # No resources to close for in-memory index
+        pass
 
 
 # =============================================================================
@@ -827,7 +828,7 @@ class PgVectorIndex(VectorIndex):
             return int(result)
 
     async def close(self) -> None:
-        """Close the connection pool."""
+        """Close connections and cleanup resources."""
         if self._pool:
             await self._pool.close()
             self._pool = None
@@ -973,9 +974,8 @@ class ChromaDBIndex(VectorIndex):
         return self._collection.count()
 
     async def close(self) -> None:
-        """Close the index."""
-        # ChromaDB client doesn't explicitly need closing in this context,
-        # but we can reset the reference
+        """Close connections and cleanup resources."""
+        # ChromaDB client doesn't explicitly require closing in this usage
         self._client = None
         self._collection = None
 
@@ -1069,7 +1069,7 @@ class SQLiteVectorIndex(VectorIndex):
                 if isinstance(embedding_json, str):
                     try:
                         embedding = json.loads(embedding_json)
-                    except:
+                    except Exception:
                         continue
                 elif isinstance(embedding_json, list):
                     embedding = embedding_json
@@ -1083,7 +1083,7 @@ class SQLiteVectorIndex(VectorIndex):
                 if isinstance(metadata, str):
                     try:
                         metadata = json.loads(metadata)
-                    except:
+                    except Exception:
                         metadata = {}
                 elif metadata is None:
                     metadata = {}
@@ -1114,7 +1114,7 @@ class SQLiteVectorIndex(VectorIndex):
             return conn.execute(text(f"SELECT COUNT(*) FROM {self.table_name}")).scalar()
 
     async def close(self) -> None:
-        """Close the index."""
+        """Close connections and cleanup resources."""
         if self._engine:
             self._engine.dispose()
             self._engine = None

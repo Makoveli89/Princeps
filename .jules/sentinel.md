@@ -3,7 +3,7 @@
 **Learning:** Even internal-facing tools (like a console backend) can leak sensitive info if error handling is naive. The assumption that "errors are just strings" is dangerous when exceptions come from lower-level libraries (DB, OS).
 **Prevention:** Always mask internal errors in production APIs. Log the full error with a unique ID, and return only that ID to the client. Never pass `str(e)` directly to `detail=` or response body.
 
-## 2025-01-10 - Unvalidated Input on Resource Creation
-**Vulnerability:** The `CreateWorkspaceRequest` Pydantic model lacked constraints on `name` and `description` fields. This allowed potentially unlimited string lengths (DoS risk) or invalid characters that could bypass downstream logic or cause unhandled database exceptions.
-**Learning:** Defining types as `str` in Pydantic is insufficient for security. While the database schema may enforce limits (e.g., `VARCHAR(255)`), failing to validate at the API layer allows bad data to traverse the entire application stack before failing, consuming resources and potentially exposing database errors.
-**Prevention:** Always use `Field` with `max_length` and regex patterns for string inputs in Pydantic models. Validate at the edge (API entry point), not just at the storage layer.
+## 2025-01-14 - Broken Generator Dependencies on Validation Error
+**Vulnerability:** When introducing strict Pydantic validation, the `get_db` dependency crashed with `RuntimeError: generator didn't stop after throw()` instead of returning 422. This masked the validation error with a 500 Internal Server Error.
+**Learning:** FastAPI injects exceptions (like validation errors) into dependency generators to trigger cleanup. If the generator catches this exception and tries to `yield` a fallback value (thinking it's a setup error), it violates the generator protocol (yielding twice).
+**Prevention:** Structure dependencies to distinguish between "setup" (before yield) and "usage" (yield). Only yield fallback values if setup fails. If usage fails, cleanup and exit without yielding.

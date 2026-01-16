@@ -1,3 +1,3 @@
-## 2024-05-24 - Accessible Chat Interfaces
-**Learning:** Chat interfaces often rely heavily on icon-only buttons (like a paper plane for "Send" or a sparkler for "AI Mode") which creates a significant barrier for screen reader users if `aria-label` is missing.
-**Action:** Always add descriptive `aria-label` and `title` attributes to icon-only buttons, even if the icon itself feels intuitive to sighted users. For toggle buttons, explicit `aria-pressed` state is critical.
+## 2026-01-13 - Icon-only Buttons in Chat Interface
+**Learning:** The chat interface uses icon-only buttons (Send, Netrunner Toggle) which completely lacked accessibility labels, making the primary interaction point invisible to screen readers.
+**Action:** Always audit `lucide-react` icon usage in `button` elements to ensure they are accompanied by `aria-label` or `title` attributes, especially in high-traffic areas like the chat input.
