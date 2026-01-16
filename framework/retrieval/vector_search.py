@@ -544,7 +544,7 @@ class VectorIndex(ABC):
 
     @abstractmethod
     async def close(self) -> None:
-        """Close connections and cleanup resources."""
+        """Release resources."""
         pass
 
 
@@ -676,9 +676,8 @@ class InMemoryVectorIndex(VectorIndex):
             self._vectors.clear()
 
     async def close(self) -> None:
-        """Close connections and cleanup resources."""
-        # No resources to close for in-memory index
-        pass
+        """Release resources."""
+        await self.clear()
 
 
 # =============================================================================
@@ -828,7 +827,7 @@ class PgVectorIndex(VectorIndex):
             return int(result)
 
     async def close(self) -> None:
-        """Close connections and cleanup resources."""
+        """Release resources."""
         if self._pool:
             await self._pool.close()
             self._pool = None
@@ -974,8 +973,9 @@ class ChromaDBIndex(VectorIndex):
         return self._collection.count()
 
     async def close(self) -> None:
-        """Close connections and cleanup resources."""
-        # ChromaDB client doesn't explicitly require closing in this usage
+        """Release resources."""
+        # ChromaDB client doesn't explicitly require closing in this version,
+        # but we can clear references.
         self._client = None
         self._collection = None
 
@@ -1114,7 +1114,7 @@ class SQLiteVectorIndex(VectorIndex):
             return conn.execute(text(f"SELECT COUNT(*) FROM {self.table_name}")).scalar()
 
     async def close(self) -> None:
-        """Close connections and cleanup resources."""
+        """Release resources."""
         if self._engine:
             self._engine.dispose()
             self._engine = None

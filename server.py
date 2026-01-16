@@ -106,7 +106,7 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"database_initialization_failed: {e}")
 
-    # Initialize Vector Index Singleton
+    # Initialize Vector Index
     try:
         db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
         if db_url.startswith("sqlite"):
@@ -120,11 +120,9 @@ async def lifespan(app: FastAPI):
         logger.info("vector_index_initialized")
     except Exception as e:
         logger.error(f"vector_index_initialization_failed: {e}")
-        # Ensure we don't crash startup, but endpoint will need fallback
         app.state.vector_index = None
 
     yield
-
     # Cleanup
     if hasattr(app.state, "vector_index") and app.state.vector_index:
         await app.state.vector_index.close()
@@ -605,11 +603,10 @@ async def search_knowledge(
     emb_service = get_embedding_service()
     query_vector = await emb_service.embed_text(q)
 
-    # Use Singleton Vector Index
+    # Use shared Vector Index
     index = getattr(app.state, "vector_index", None)
     if not index:
-        # Fallback initialization if singleton missing (e.g., startup error)
-        logger.warning("vector_index_fallback_init")
+        # Fallback if initialization failed or not set
         db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
         if db_url.startswith("sqlite"):
             index = create_sqlite_index(connection_string=db_url, table_name="doc_chunks")
