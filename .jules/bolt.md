@@ -1,5 +1,3 @@
-# Bolt's Journal
-
-## 2025-05-23 - Vector Search Indexing: HNSW vs IVFFlat
-**Learning:** Initial attempt used `ivfflat` index for `pgvector` columns. While valid, `ivfflat` relies on k-means clustering calculated at index creation time. If created on an empty or small table (common in CI/CD or new deployments), the index is ineffective and requires a manual `REINDEX` after data load. `hnsw` is superior as it builds the graph incrementally, requires no training step, and handles dynamic data growth robustly without performance degradation.
-**Action:** Prefer `hnsw` indexes for vector columns unless there are specific memory constraints prohibiting it. Always verify index type suitability for the deployment lifecycle (empty -> populated).
+## 2024-05-23 - Singleton Vector Index
+**Learning:** Initializing database adapters (like `PgVectorIndex` or `AsyncEngine`) inside request handlers creates a new connection pool for every request, leading to rapid resource exhaustion and high latency.
+**Action:** Always initialize heavy resources with connection pools in the application `lifespan` (or `on_event("startup")`) and store them in `app.state` for reuse across requests. Ensure `close()` is called on shutdown.

@@ -106,23 +106,27 @@ async def lifespan(app: FastAPI):
     except Exception as e:
         logger.error(f"database_initialization_failed: {e}")
 
-    # Initialize Vector Index based on Environment
-    db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
-
-    # Store in app.state for reuse (connection pooling)
-    if db_url.startswith("sqlite"):
-        app.state.vector_index = create_sqlite_index(
-            connection_string=db_url, table_name="doc_chunks"
-        )
-    else:
-        app.state.vector_index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
-
-    logger.info("vector_index_initialized", type=type(app.state.vector_index).__name__)
+    # Initialize Vector Index Singleton
+    try:
+        db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
+        if db_url.startswith("sqlite"):
+            app.state.vector_index = create_sqlite_index(
+                connection_string=db_url, table_name="doc_chunks"
+            )
+        else:
+            app.state.vector_index = PgVectorIndex(
+                connection_string=db_url, table_name="doc_chunks"
+            )
+        logger.info("vector_index_initialized")
+    except Exception as e:
+        logger.error(f"vector_index_initialization_failed: {e}")
+        # Ensure we don't crash startup, but endpoint will need fallback
+        app.state.vector_index = None
 
     yield
 
     # Cleanup
-    if hasattr(app.state, "vector_index"):
+    if hasattr(app.state, "vector_index") and app.state.vector_index:
         await app.state.vector_index.close()
         logger.info("vector_index_closed")
 
@@ -567,6 +571,17 @@ async def search_knowledge(
     # Get query embedding
     emb_service = get_embedding_service()
     query_vector = await emb_service.embed_text(q)
+
+    # Use Singleton Vector Index
+    index = getattr(app.state, "vector_index", None)
+    if not index:
+        # Fallback initialization if singleton missing (e.g., startup error)
+        logger.warning("vector_index_fallback_init")
+        db_url = os.getenv("DATABASE_URL", "sqlite:///./princeps.db")
+        if db_url.startswith("sqlite"):
+            index = create_sqlite_index(connection_string=db_url, table_name="doc_chunks")
+        else:
+            index = PgVectorIndex(connection_string=db_url, table_name="doc_chunks")
 
     # Search
     index = request.app.state.vector_index
