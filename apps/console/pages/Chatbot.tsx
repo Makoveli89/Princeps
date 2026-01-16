@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { GoogleGenAI } from "@google/genai";
-import { Send, Bot, Sparkles, Globe, Terminal, Loader2 } from 'lucide-react';
+import { Bot, Sparkles, Globe, Loader2 } from 'lucide-react';
 import { Workspace, Message } from '../types';
 import { ChatMessage } from '../components/ChatMessage';
+import { ChatInput } from '../components/ChatInput';
 
 export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
     const [messages, setMessages] = useState<Message[]>([
@@ -13,7 +14,6 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
             timestamp: new Date()
         }
     ]);
-    const [input, setInput] = useState('');
     const [isThinking, setIsThinking] = useState(false);
     const [useWebSearch, setUseWebSearch] = useState(false);
     const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -26,18 +26,17 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
         scrollToBottom();
     }, [messages]);
 
-    const handleSend = async () => {
-        if (!input.trim() || isThinking) return;
+    const handleSend = async (textInput: string) => {
+        if (!textInput.trim() || isThinking) return;
 
         const userMsg: Message = {
             id: Date.now().toString(),
             role: 'user',
-            text: input,
+            text: textInput,
             timestamp: new Date()
         };
 
         setMessages(prev => [...prev, userMsg]);
-        setInput('');
         setIsThinking(true);
 
         try {
@@ -61,7 +60,7 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
 
             const response = await ai.models.generateContent({
                 model: modelName,
-                contents: input,
+                contents: textInput,
                 config: config
             });
 
@@ -86,7 +85,7 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
                 errorText = "CRITICAL FAILURE: API Key not found in environment variables.\n\nPlease set VITE_GEMINI_API_KEY in .env file.";
             } else {
                 // Fallback for demo purposes if API call fails
-                errorText = `Error accessing model: ${error.message}.\n\n(Mock Response): This appears to be a simulation. If I were fully connected, I would provide a detailed analysis of "${input}".`;
+                errorText = `Error accessing model: ${error.message}.\n\n(Mock Response): This appears to be a simulation. If I were fully connected, I would provide a detailed analysis of "${textInput}".`;
             }
 
             const errorMsg: Message = {
@@ -98,13 +97,6 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
             setMessages(prev => [...prev, errorMsg]);
         } finally {
             setIsThinking(false);
-        }
-    };
-
-    const handleKeyDown = (e: React.KeyboardEvent) => {
-        if (e.key === 'Enter' && !e.shiftKey) {
-            e.preventDefault();
-            handleSend();
         }
     };
 
@@ -125,6 +117,8 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
                 {/* Mode Toggle */}
                 <button
                     onClick={() => setUseWebSearch(!useWebSearch)}
+                    aria-pressed={useWebSearch}
+                    aria-label={useWebSearch ? 'Disable Netrunner Mode' : 'Enable Netrunner Mode'}
                     className={`flex items-center gap-3 px-4 py-2 border transition-all duration-300 ${
                         useWebSearch
                         ? 'bg-cyan-950/30 border-cyan-500 text-cyan-400 shadow-[0_0_15px_rgba(0,243,255,0.2)]'
@@ -177,12 +171,15 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
                             value={input}
                             onChange={(e) => setInput(e.target.value)}
                             onKeyDown={handleKeyDown}
+                            aria-label="Chat input"
                             placeholder={`Enter prompt for ${useWebSearch ? 'Netrunner (Web)' : 'Princeps (Core)'}...`}
                             className="w-full bg-[#050505] border border-gray-800 text-gray-300 pl-12 pr-14 py-4 mono-font resize-none outline-none focus:border-cyan-700/50 transition-colors h-14 min-h-[56px] max-h-32 custom-scrollbar shadow-inner"
                         />
                         <button
                             onClick={handleSend}
                             disabled={!input.trim() || isThinking}
+                            aria-label="Send message"
+                            title="Send message"
                             className="absolute right-2 top-2 p-2 bg-gray-900 border border-gray-700 text-cyan-500 hover:bg-cyan-950 hover:text-cyan-400 hover:border-cyan-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed group/btn"
                         >
                             <Send size={16} className="group-hover/btn:translate-x-0.5 transition-transform" />

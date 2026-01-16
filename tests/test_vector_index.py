@@ -267,11 +267,16 @@ class TestEmbeddingNullability:
         session.commit()
 
         # Find chunks needing embeddings
+        # For SQLite with JSON column, explicit check vs None works,
+        # but sometimes needs to be careful if it stores 'null' string vs NULL.
+        # Fallback for JSON type which might be empty string or JSON null
+        from sqlalchemy import or_
+
         needs_embedding = (
             session.query(DocChunk)
             .filter(
                 DocChunk.tenant_id == tenant.id,
-                DocChunk.embedding == None,  # noqa: E711 - SQLAlchemy needs == None
+                or_(DocChunk.embedding.is_(None), DocChunk.embedding == "null"),
             )
             .all()
         )
