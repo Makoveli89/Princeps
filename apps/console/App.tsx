@@ -24,8 +24,10 @@ const App = () => {
 
   useEffect(() => {
     if (workspaces && workspaces.length > 0 && !activeWorkspaceId) {
+      // eslint-disable-next-line react-hooks/exhaustive-deps
       setActiveWorkspaceId(workspaces[0].id);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [workspaces, activeWorkspaceId]);
 
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || workspaces[0];

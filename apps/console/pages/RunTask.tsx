@@ -75,7 +75,7 @@ export const RunTask = ({ workspace }: { workspace: Workspace }) => {
             </div>
 
             <div className="bg-[#030303] border border-gray-800 p-4 relative">
-                <label className="text-[10px] text-gray-500 uppercase tracking-widest block mb-3 font-bold">Workflow Strategy</label>
+                <h3 className="text-[10px] text-gray-500 uppercase tracking-widest block mb-3 font-bold">Workflow Strategy</h3>
                 <div className="flex gap-2">
                     <button className="flex-1 py-3 bg-cyan-950/20 border border-cyan-700/50 text-cyan-400 text-[10px] font-bold uppercase hover:bg-cyan-900/40 transition-colors shadow-[0_0_10px_rgba(0,243,255,0.05)]">
                         Autonomous (Plan+Exec)

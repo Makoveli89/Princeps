@@ -1,28 +1,30 @@
-FROM python:3.11-slim
+FROM python:3.11-slim AS builder
 
 WORKDIR /app
 
-# Install system dependencies
-# libpq-dev and gcc are often needed for psycopg2 (if not binary) or other C extensions
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libpq-dev \
     && rm -rf /var/lib/apt/lists/*
 
-COPY requirements.txt /app/requirements.txt
+COPY requirements.txt .
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip install --no-cache-dir --target=/app/deps -r requirements.txt
 
-RUN pip install --no-cache-dir --upgrade -r /app/requirements.txt
+FROM python:3.11-slim
 
-# Copy application code
+WORKDIR /app
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    libpq-dev \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /app/deps /usr/local/lib/python3.11/site-packages
 COPY . /app
 
-# Expose port
 EXPOSE 80
 
-# Environment variables
-ENV MODULE_NAME=server
-ENV VARIABLE_NAME=app
-ENV PORT=80
+ENV PYTHONPATH=/app
+ENV PYTHONUNBUFFERED=1
 
-# Run command
 CMD ["gunicorn", "-c", "gunicorn_conf.py", "server:app"]

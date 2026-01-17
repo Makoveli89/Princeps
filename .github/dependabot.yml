@@ -1,6 +1,5 @@
 version: 2
 updates:
-  # Maintain dependencies for Python in the root directory
   - package-ecosystem: "pip"
     directory: "/"
     schedule:
@@ -10,7 +9,6 @@ updates:
         patterns:
           - "*"
 
-  # Maintain dependencies for npm in apps/console
   - package-ecosystem: "npm"
     directory: "/apps/console"
     schedule:

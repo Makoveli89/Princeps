@@ -5,6 +5,7 @@ import { LayoutDashboard, Play, Database, FileText, Search, Activity, Settings, 
 import { Workspace } from '../types';
 import { COLORS } from '../constants';
 import { Toaster } from './ui/toaster';
+import { CommandMenu } from './ui/command-menu';
 
 interface LayoutProps {
   children: React.ReactNode;
@@ -52,11 +53,12 @@ export const Layout: React.FC<LayoutProps> = ({ children, workspaces, activeWork
 
         {/* Global Workspace Selector */}
         <div className="px-4 py-6 border-b border-gray-900 bg-[#030303]">
-            <label className="text-[9px] uppercase tracking-widest text-gray-500 mb-2 block pl-1 flex items-center gap-2">
+            <label htmlFor="workspace-select" className="text-[9px] uppercase tracking-widest text-gray-500 mb-2 block pl-1 flex items-center gap-2">
                 <div className="w-1 h-1 bg-cyan-500 rounded-full shadow-[0_0_5px_#00f3ff]"></div> Active Link
             </label>
             <div className="relative group">
                 <select
+                    id="workspace-select"
                     value={activeWorkspaceId}
                     onChange={(e) => onWorkspaceChange(e.target.value)}
                     className="w-full bg-[#080808] border border-gray-800 text-cyan-500 font-bold text-xs mono-font py-2 px-3 appearance-none focus:outline-none focus:border-cyan-700/50 transition-colors cursor-pointer hover:border-gray-700 shadow-[inset_0_0_10px_rgba(0,0,0,0.5)]"
@@ -130,6 +132,7 @@ export const Layout: React.FC<LayoutProps> = ({ children, workspaces, activeWork
             {children}
         </div>
         <Toaster />
+        <CommandMenu />
       </main>
     </div>
   );

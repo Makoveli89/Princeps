@@ -90,7 +90,7 @@ export const IngestData = ({ workspace }: { workspace: Workspace }) => {
                  <Upload size={48} className="text-gray-700 mb-6 group-hover/drop:text-cyan-400 group-hover/drop:scale-110 transition-all duration-500 drop-shadow-[0_0_10px_rgba(0,243,255,0.2)] relative z-10" />
                  <h3 className="text-gray-300 font-mono text-lg relative z-10 tracking-wide">Upload Documents</h3>
                  <p className="text-gray-600 text-xs mt-2 mb-8 text-center max-w-sm relative z-10 font-mono">
-                    Drag and drop PDF, TXT, MD, PY, JSON files here to embed them into the active workspace's vector index.
+                    Drag and drop PDF, TXT, MD, PY, JSON files here to embed them into the active workspace&apos;s vector index.
                  </p>
                  <input
                     type="file"
