@@ -2,9 +2,7 @@ from dotenv import load_dotenv
 
 load_dotenv()  # Load .env file
 import datetime
-import logging
 import os
-import sys
 import uuid
 from contextlib import asynccontextmanager
 from typing import Any
@@ -29,30 +27,11 @@ from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
 from sqlalchemy import desc
 
+from framework.utilities.logging import configure_logging
+
 # --- Structlog Configuration ---
 
-# Configure standard logging to intercept basic logs
-logging.basicConfig(format="%(message)s", stream=sys.stdout, level=logging.INFO)
-
-structlog.configure(
-    processors=[
-        structlog.contextvars.merge_contextvars,
-        structlog.stdlib.filter_by_level,
-        structlog.stdlib.add_logger_name,
-        structlog.stdlib.add_log_level,
-        structlog.stdlib.PositionalArgumentsFormatter(),
-        structlog.processors.TimeStamper(fmt="iso"),
-        structlog.processors.StackInfoRenderer(),
-        structlog.processors.format_exc_info,
-        structlog.processors.UnicodeDecoder(),
-        structlog.processors.JSONRenderer(),
-    ],
-    context_class=dict,
-    logger_factory=structlog.stdlib.LoggerFactory(),
-    wrapper_class=structlog.stdlib.BoundLogger,
-    cache_logger_on_first_use=True,
-)
-
+configure_logging()
 logger = structlog.get_logger()
 
 # Princeps Imports
@@ -80,10 +59,6 @@ from framework.skills.registry import get_registry
 
 # Skills
 from framework.skills.resolver import SkillResolver
-
-# Initialize Logger
-logging.basicConfig(level=logging.INFO)
-logger = logging.getLogger(__name__)
 
 
 # Initialize Database on Startup
