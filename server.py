@@ -649,7 +649,12 @@ def get_metrics(db=Depends(get_db)):
 
     # Simplified: Get all runs in last 24h
     cutoff = datetime.datetime.utcnow() - datetime.timedelta(hours=24)
-    runs = db.query(AgentRun).filter(AgentRun.started_at >= cutoff).all()
+    # Optimized: Only fetch required columns to avoid loading large text/JSON fields
+    runs = (
+        db.query(AgentRun.started_at, AgentRun.success)
+        .filter(AgentRun.started_at >= cutoff)
+        .all()
+    )
 
     if not runs:
         # Return at least empty structure
