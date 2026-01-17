@@ -91,6 +91,28 @@ from framework.skills.resolver import SkillResolver
 logging.basicConfig(level=logging.INFO)
 # logger = logging.getLogger(__name__)  # Don't overwrite structlog logger
 
+# --- SENTINEL FIX START ---
+# Register built-in tools for the ExecutorAgent with strict security controls
+from framework.tools.builtin_tools import register_builtin_tools
+from framework.tools.tool_registry import get_tool_registry
+
+# Ensure sandbox directory exists
+sandbox_path = os.path.join(os.getcwd(), "sandbox")
+os.makedirs(sandbox_path, exist_ok=True)
+
+# Register tools with sandbox restrictions
+# This prevents the "Operator" agent from accessing the entire filesystem
+register_builtin_tools(
+    registry=get_tool_registry(),
+    shell_sandbox=sandbox_path,
+    file_directories=[sandbox_path],
+    # By default we don't restrict domains too much as agents might need broad access,
+    # but we could add allowed_domains here if needed.
+)
+# Use logger to record this security event
+logger.info("registered_builtin_tools_with_sandbox", path=sandbox_path)
+# --- SENTINEL FIX END ---
+
 
 # Initialize Database on Startup
 @asynccontextmanager

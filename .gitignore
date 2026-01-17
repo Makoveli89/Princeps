@@ -93,6 +93,7 @@ Desktop.ini
 *.sqlite
 *.db
 nul
+sandbox/
 
 # Local config (keep .env.example)
 .env.local

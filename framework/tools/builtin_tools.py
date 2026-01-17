@@ -83,6 +83,19 @@ class ShellTool(BaseTool):
         r"\breboot\b",
         r"\bhalt\b",
         r"\binit\s+[0-6]\b",
+        # SENTINEL FIX: Block file reading/editing commands to force use of FileReadTool/FileWriteTool
+        r"\bcat\b",
+        r"\bgrep\b",
+        r"\bhead\b",
+        r"\btail\b",
+        r"\bmore\b",
+        r"\bless\b",
+        r"\bvi\b",
+        r"\bvim\b",
+        r"\bnano\b",
+        r"\bemacs\b",
+        r"\bawk\b",
+        r"\bsed\b",
     ]
 
     # Allowed commands (if set, only these are allowed)
