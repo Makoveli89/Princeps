@@ -27,7 +27,7 @@ from slowapi import Limiter, _rate_limit_exceeded_handler
 from slowapi.errors import RateLimitExceeded
 from slowapi.middleware import SlowAPIMiddleware
 from slowapi.util import get_remote_address
-from sqlalchemy import desc, func
+from sqlalchemy import String, cast, desc, func
 
 # --- Structlog Configuration ---
 
@@ -693,7 +693,20 @@ def get_runs(workspaceId: str | None = None, limit: int = 50, db=Depends(get_db)
     if db is None:
         return []
 
-    query = db.query(AgentRun)
+    # Optimized query to avoid fetching large text/JSON columns
+    # We use cast and substr to get only what we need for previews
+    query = db.query(
+        AgentRun.id,
+        AgentRun.agent_id,
+        AgentRun.started_at,
+        AgentRun.success,
+        AgentRun.duration_ms,
+        AgentRun.tenant_id,
+        func.substr(AgentRun.task, 1, 60).label("task_preview"),
+        func.substr(cast(AgentRun.solution, String), 1, 60).label("solution_preview"),
+        func.substr(AgentRun.feedback, 1, 60).label("feedback_preview"),
+    )
+
     if workspaceId:
         query = query.filter(AgentRun.tenant_id == uuid.UUID(workspaceId))
 
@@ -701,19 +714,32 @@ def get_runs(workspaceId: str | None = None, limit: int = 50, db=Depends(get_db)
 
     dtos = []
     for r in runs:
-        # Convert DB model to DTO
+        # r is a Row object, not AgentRun instance
+
+        # Helper to format preview
+        def format_preview(text: str | None) -> str:
+            if not text:
+                return ""
+            return text[:50] + "..." if len(text) > 50 else text
+
+        input_prev = format_preview(r.task_preview)
+
+        # Output can be solution or feedback
+        if r.solution_preview:
+            output_prev = format_preview(r.solution_preview)
+        elif r.feedback_preview:
+            output_prev = format_preview(r.feedback_preview)
+        else:
+            output_prev = ""
+
         dtos.append(
             RunLogDTO(
                 run_id=str(r.id),
                 agent=r.agent_id,
                 timestamp=r.started_at.isoformat() if r.started_at else "",
                 status="SUCCESS" if r.success else "FAILURE",
-                input_preview=r.task[:50] + "..." if r.task else "",
-                output_preview=(
-                    str(r.solution)[:50] + "..."
-                    if r.solution
-                    else (r.feedback[:50] if r.feedback else "")
-                ),
+                input_preview=input_prev,
+                output_preview=output_prev,
                 duration_ms=r.duration_ms or 0,
                 workspace_id=str(r.tenant_id),
                 logs=[],  # Logs not currently stored in AgentRun explicitly as list
