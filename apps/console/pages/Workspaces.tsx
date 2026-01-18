@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Plus, Database, Edit2, Check } from 'lucide-react';
+import { Plus, Database, Edit2, Check, Loader2 } from 'lucide-react';
 import { Workspace } from '../types';
 
 export const Workspaces = ({
@@ -14,8 +14,12 @@ export const Workspaces = ({
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newDesc, setNewDesc] = useState('');
+  const [isCreating, setIsCreating] = useState(false);
 
   const handleCreate = async () => {
+    if (!newName.trim()) return;
+
+    setIsCreating(true);
     try {
       const res = await fetch('/api/workspaces', {
         method: 'POST',
@@ -29,6 +33,9 @@ export const Workspaces = ({
       }
     } catch (e) {
       console.error(e);
+      alert('An error occurred');
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -38,6 +45,7 @@ export const Workspaces = ({
         <h2 className="gothic-font text-2xl text-white">Workspaces</h2>
         <button
           onClick={() => setShowCreate(!showCreate)}
+          aria-expanded={showCreate}
           className="flex items-center gap-2 border border-gray-700 bg-gray-900 px-4 py-2 text-xs uppercase text-gray-300 transition-colors hover:bg-gray-800"
         >
           <Plus size={14} /> Create New
@@ -47,24 +55,46 @@ export const Workspaces = ({
       {showCreate && (
         <div className="animate-in fade-in slide-in-from-top-4 max-w-lg border border-gray-700 bg-[#080808] p-6">
           <h3 className="mb-4 text-white">New Workspace</h3>
-          <input
-            className="mb-2 w-full border border-gray-800 bg-black p-2 text-white"
-            placeholder="Workspace Name"
-            value={newName}
-            onChange={(e) => setNewName(e.target.value)}
-          />
-          <input
-            className="mb-4 w-full border border-gray-800 bg-black p-2 text-white"
-            placeholder="Description"
-            value={newDesc}
-            onChange={(e) => setNewDesc(e.target.value)}
-          />
-          <button
-            onClick={handleCreate}
-            className="flex items-center gap-2 border border-cyan-800 bg-cyan-900/50 px-4 py-2 text-sm text-cyan-400 hover:bg-cyan-900/80"
-          >
-            <Check size={14} /> Confirm
-          </button>
+
+          <div className="space-y-4">
+            <div>
+              <label htmlFor="ws-name" className="mb-1 block text-xs font-medium text-gray-400">
+                Workspace Name <span className="text-red-500">*</span>
+              </label>
+              <input
+                id="ws-name"
+                className="w-full border border-gray-800 bg-black p-2 text-white focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                placeholder="e.g. Finance Team"
+                value={newName}
+                onChange={(e) => setNewName(e.target.value)}
+                required
+                disabled={isCreating}
+              />
+            </div>
+
+            <div>
+              <label htmlFor="ws-desc" className="mb-1 block text-xs font-medium text-gray-400">
+                Description
+              </label>
+              <input
+                id="ws-desc"
+                className="w-full border border-gray-800 bg-black p-2 text-white focus:border-cyan-500 focus:outline-none focus:ring-1 focus:ring-cyan-500"
+                placeholder="Brief description of this workspace"
+                value={newDesc}
+                onChange={(e) => setNewDesc(e.target.value)}
+                disabled={isCreating}
+              />
+            </div>
+
+            <button
+              onClick={handleCreate}
+              disabled={isCreating || !newName.trim()}
+              className="flex items-center gap-2 border border-cyan-800 bg-cyan-900/50 px-4 py-2 text-sm text-cyan-400 hover:bg-cyan-900/80 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {isCreating ? <Loader2 size={14} className="animate-spin" /> : <Check size={14} />}
+              {isCreating ? 'Creating...' : 'Confirm'}
+            </button>
+          </div>
         </div>
       )}
 
