@@ -87,6 +87,9 @@ from framework.skills.registry import get_registry
 # Skills
 from framework.skills.resolver import SkillResolver
 
+# Tools
+from framework.tools import register_builtin_tools
+
 # Initialize Logger
 logging.basicConfig(level=logging.INFO)
 # logger = logging.getLogger(__name__)  # Don't overwrite structlog logger
@@ -95,6 +98,18 @@ logging.basicConfig(level=logging.INFO)
 # Initialize Database on Startup
 @asynccontextmanager
 async def lifespan(app: FastAPI):
+    # Initialize Tools with Sandbox
+    try:
+        sandbox_dir = os.path.join(os.getcwd(), "sandbox")
+        os.makedirs(sandbox_dir, exist_ok=True)
+        register_builtin_tools(
+            shell_sandbox=sandbox_dir,
+            file_directories=[sandbox_dir]
+        )
+        logger.info("tools_initialized", sandbox_dir=sandbox_dir)
+    except Exception as e:
+        logger.error("tools_initialization_failed", error=str(e))
+
     # Check/Init Database
     try:
         engine = get_engine()
