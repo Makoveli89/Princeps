@@ -161,50 +161,11 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
                 <div className="flex h-8 w-8 flex-shrink-0 items-center justify-center rounded-sm border border-cyan-800 bg-cyan-950/20 text-cyan-400">
                   <Bot size={16} />
                 </div>
-
-                {/* Mode Toggle */}
-                <button
-                    onClick={() => setUseWebSearch(!useWebSearch)}
-                    aria-pressed={useWebSearch}
-                    className={`flex items-center gap-3 px-4 py-2 border transition-all duration-300 ${
-                        useWebSearch
-                        ? 'bg-cyan-950/30 border-cyan-500 text-cyan-400 shadow-[0_0_15px_rgba(0,243,255,0.2)]'
-                        : 'bg-gray-900 border-gray-700 text-gray-400 hover:border-gray-500'
-                    }`}
-                >
-                    {useWebSearch ? <Globe size={16} className="animate-pulse" /> : <Sparkles size={16} />}
-                    <span className="text-xs font-bold uppercase tracking-widest">
-                        {useWebSearch ? 'Netrunner Mode (Search)' : 'Reasoning Mode (Pro)'}
-                    </span>
-                </button>
-            </div>
-
-            {/* Chat History */}
-            <div className="flex-1 bg-[#030303] border border-gray-800 relative overflow-hidden flex flex-col shadow-2xl">
-                {/* Background Grid */}
-                <div className="absolute inset-0 z-0 opacity-[0.03]" style={{ backgroundImage: 'linear-gradient(#333 1px, transparent 1px), linear-gradient(90deg, #333 1px, transparent 1px)', backgroundSize: '20px 20px' }}></div>
-
-                <div className="flex-1 overflow-y-auto p-6 space-y-6 relative z-10 custom-scrollbar">
-                    {messages.map((msg) => (
-                        <ChatMessage key={msg.id} msg={msg} />
-                    ))}
-
-                    {isThinking && (
-                        <div className="flex justify-start">
-                            <div className="max-w-[80%] flex gap-4 flex-row">
-                                <div className="w-8 h-8 rounded-sm bg-cyan-950/20 border border-cyan-800 text-cyan-400 flex items-center justify-center flex-shrink-0">
-                                    <Bot size={16} />
-                                </div>
-                                <div className="p-4 rounded-sm border border-cyan-900/30 bg-cyan-950/5 flex items-center gap-2">
-                                    <Loader2 size={16} className="animate-spin text-cyan-500" />
-                                    <span className="text-xs mono-font text-cyan-600 animate-pulse">
-                                        {useWebSearch ? 'SCANNING NETWORK...' : 'PROCESSING THOUGHT...'}
-                                    </span>
-                                </div>
-                            </div>
-                        </div>
-                    )}
-                    <div ref={messagesEndRef} />
+                <div className="flex items-center gap-2 rounded-sm border border-cyan-900/30 bg-cyan-950/5 p-4">
+                  <Loader2 size={16} className="animate-spin text-cyan-500" />
+                  <span className="mono-font animate-pulse text-xs text-cyan-600">
+                    {useWebSearch ? 'SCANNING NETWORK...' : 'PROCESSING THOUGHT...'}
+                  </span>
                 </div>
               </div>
             </div>
@@ -212,35 +173,12 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
           <div ref={messagesEndRef} />
         </div>
 
-                {/* Input Area */}
-                <div className="p-4 border-t border-gray-800 bg-[#020202]">
-                    <div className="relative group focus-within:ring-1 focus-within:ring-cyan-900/50">
-                        <div className="absolute inset-0 bg-gradient-to-r from-cyan-900/10 to-transparent pointer-events-none opacity-0 group-focus-within:opacity-100 transition-opacity"></div>
-                        <div className="absolute left-4 top-4 text-gray-600 pointer-events-none">
-                            <Terminal size={16} />
-                        </div>
-                        <textarea
-                            value={input}
-                            onChange={(e) => setInput(e.target.value)}
-                            onKeyDown={handleKeyDown}
-                            placeholder={`Enter prompt for ${useWebSearch ? 'Netrunner (Web)' : 'Princeps (Core)'}...`}
-                            className="w-full bg-[#050505] border border-gray-800 text-gray-300 pl-12 pr-14 py-4 mono-font resize-none outline-none focus:border-cyan-700/50 transition-colors h-14 min-h-[56px] max-h-32 custom-scrollbar shadow-inner"
-                        />
-                        <button
-                            onClick={handleSend}
-                            disabled={!input.trim() || isThinking}
-                            aria-label="Send message"
-                            title="Send message"
-                            className="absolute right-2 top-2 p-2 bg-gray-900 border border-gray-700 text-cyan-500 hover:bg-cyan-950 hover:text-cyan-400 hover:border-cyan-600 transition-all disabled:opacity-50 disabled:cursor-not-allowed group/btn"
-                        >
-                            <Send size={16} className="group-hover/btn:translate-x-0.5 transition-transform" />
-                        </button>
-                    </div>
-                    <div className="mt-2 flex justify-between items-center text-[10px] text-gray-600 mono-font uppercase tracking-widest">
-                        <span>Workspace Context: Active</span>
-                        <span>Model: {useWebSearch ? 'Gemini 3 Flash (Grounding)' : 'Gemini 3 Pro (Preview)'}</span>
-                    </div>
-                </div>
+        {/* Input Area */}
+        <div className="border-t border-gray-800 bg-[#020202] p-4">
+          <div className="group relative focus-within:ring-1 focus-within:ring-cyan-900/50">
+            <div className="pointer-events-none absolute inset-0 bg-gradient-to-r from-cyan-900/10 to-transparent opacity-0 transition-opacity group-focus-within:opacity-100"></div>
+            <div className="pointer-events-none absolute left-4 top-4 text-gray-600">
+              <Terminal size={16} />
             </div>
             <textarea
               value={input}
@@ -252,6 +190,8 @@ export const Chatbot = ({ workspace }: { workspace: Workspace }) => {
             <button
               onClick={handleSend}
               disabled={!input.trim() || isThinking}
+              aria-label="Send message"
+              title="Send message"
               className="group/btn absolute right-2 top-2 border border-gray-700 bg-gray-900 p-2 text-cyan-500 transition-all hover:border-cyan-600 hover:bg-cyan-950 hover:text-cyan-400 disabled:cursor-not-allowed disabled:opacity-50"
             >
               <Send size={16} className="transition-transform group-hover/btn:translate-x-0.5" />
